@@ -1,0 +1,11 @@
+{
+  "name": "Ether Explains",
+  "short_name": "Ether Explains",
+  "description": "Build 3D animated explainers with Claude and three.js, then play and record them.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07060f",
+  "theme_color": "#07060f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

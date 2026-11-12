@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ether Explains</title>
+<meta name="description" content="Ether Explains — build 3D animated explainers with Claude and three.js, then play and record them.">
+<meta name="theme-color" content="#07060f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="aether" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <img src="icon.svg" alt="" class="brand-mark">
+    <div>
+      <h1>Ether <em>Explains</em></h1>
+      <p class="tag">3D explainers, written in light</p>
+    </div>
+  </div>
+  <div class="project-bar">
+    <input id="projectName" class="project-name" placeholder="Untitled explainer" aria-label="Project name">
+    <span id="saveState" class="save-state">Saved</span>
+    <button id="newBtn" class="btn ghost">New</button>
+    <button id="projectsBtn" class="btn ghost">Projects</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- LEFT: steps -->
+  <section class="panel">
+    <nav class="steps" role="tablist">
+      <button class="step active" data-tab="style" role="tab"><span>1</span>Style</button>
+      <button class="step" data-tab="story" role="tab"><span>2</span>Story</button>
+      <button class="step" data-tab="prompt" role="tab"><span>3</span>Prompt</button>
+      <button class="step" data-tab="revise" role="tab"><span>4</span>Revise</button>
+    </nav>
+
+    <!-- STYLE -->
+    <div class="tab active" id="tab-style">
+      <div class="row gap">
+        <input id="styleSearch" class="input" placeholder="Search 37 styles…" aria-label="Search styles">
+      </div>
+      <div class="chips" id="catChips"></div>
+      <div class="gallery" id="gallery"></div>
+      <details class="custom-style">
+        <summary>Paste your own style prompt</summary>
+        <p class="hint">Copied a prompt from the 3D Style Atlas or written your own? Paste it here and it becomes the style for this project.</p>
+        <input id="customName" class="input" placeholder="Style name">
+        <textarea id="customBrief" class="input" rows="6" placeholder="Paste the style prompt or describe the look…"></textarea>
+        <button id="useCustom" class="btn">Use this style</button>
+      </details>
+    </div>
+
+    <!-- STORY -->
+    <div class="tab" id="tab-story">
+      <label class="field"><span>Topic</span>
+        <textarea id="topic" class="input" rows="3" placeholder="e.g. Why the Moon has phases"></textarea>
+      </label>
+      <div class="grid3">
+        <label class="field"><span>Length (sec)</span>
+          <input id="duration" type="number" min="5" max="180" value="20" class="input"></label>
+        <label class="field"><span>Aspect</span>
+          <select id="aspect" class="input">
+            <option value="16:9">16:9 · YouTube</option>
+            <option value="9:16">9:16 · Shorts / Reels</option>
+            <option value="1:1">1:1 · Square</option>
+          </select></label>
+        <label class="field"><span>Kind</span>
+          <select id="genre" class="input">
+            <option>Explainer</option><option>Story</option><option>Product shot</option><option>Title</option>
+          </select></label>
+      </div>
+      <label class="field"><span>Audience &amp; tone</span>
+        <input id="tone" class="input" placeholder="e.g. curious beginners, calm and wonder-filled"></label>
+      <label class="field"><span>Palette / brand notes (optional)</span>
+        <input id="palette" class="input" placeholder="e.g. Ether purples and gold, end on the Ether logo text"></label>
+
+      <div class="subhead">Narration timing</div>
+      <p class="hint">Paste an SRT from your voiceover so every beat lands on its line. No SRT yet? Write the script and Ether Explains will estimate the timing.</p>
+      <div class="seg" id="timingMode">
+        <button class="active" data-mode="srt">SRT</button>
+        <button data-mode="script">Script</button>
+        <button data-mode="none">No narration</button>
+      </div>
+      <div id="srtBox">
+        <textarea id="srt" class="input mono" rows="7" placeholder="1&#10;00:00:00,000 --> 00:00:03,200&#10;The Moon makes no light of its own."></textarea>
+        <label class="btn ghost file-btn">Load .srt<input id="srtFile" type="file" accept=".srt,.vtt,.txt" hidden></label>
+      </div>
+      <div id="scriptBox" hidden>
+        <textarea id="script" class="input" rows="7" placeholder="One sentence per line works best."></textarea>
+        <label class="field inline"><span>Words per minute</span><input id="wpm" type="number" value="150" min="80" max="220" class="input small"></label>
+        <button id="scriptToSrt" class="btn ghost">Turn into timed cues</button>
+      </div>
+      <div id="cueSummary" class="cue-summary"></div>
+      <details class="tip">
+        <summary>How to get an SRT from a voiceover</summary>
+        <p>Make your voiceover (your own voice, or a TTS tool like Google AI Studio), then ask a transcription tool to "transcribe this audio as an SRT file with sentence-level timestamps." Paste the result above. Keep the audio file — you'll load it when recording.</p>
+      </details>
+      <button class="btn primary wide" data-goto="prompt">Build the prompt →</button>
+    </div>
+
+    <!-- PROMPT -->
+    <div class="tab" id="tab-prompt">
+      <div class="prompt-head">
+        <div>
+          <div class="subhead">Your prompt for Claude</div>
+          <p class="hint">Copy it, paste it into a new Claude chat, then bring the HTML back into the player.</p>
+        </div>
+        <label class="check"><input type="checkbox" id="withSound"> Add sound effects</label>
+      </div>
+      <textarea id="promptOut" class="input mono prompt-out" rows="18" spellcheck="false"></textarea>
+      <div class="row gap">
+        <button id="copyPrompt" class="btn primary">Copy prompt</button>
+        <a class="btn ghost" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a>
+        <button id="pasteCodeBtn2" class="btn ghost">Paste Claude's code</button>
+      </div>
+    </div>
+
+    <!-- REVISE -->
+    <div class="tab" id="tab-revise">
+      <div class="subhead">Ask for a change</div>
+      <p class="hint">Describe what to change. Errors from the player are added automatically.</p>
+      <textarea id="changeReq" class="input" rows="5" placeholder="e.g. Slow the camera in beat 2, make the Moon brighter, move the caption higher"></textarea>
+      <div id="errorBox" class="error-box" hidden></div>
+      <label class="check"><input type="checkbox" id="includeCode" checked> Include the current code (for a new Claude chat)</label>
+      <textarea id="reviseOut" class="input mono" rows="10" spellcheck="false" readonly></textarea>
+      <div class="row gap">
+        <button id="copyRevise" class="btn primary">Copy change prompt</button>
+        <a class="btn ghost" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a>
+      </div>
+      <div class="subhead">Versions</div>
+      <div id="versions" class="versions"></div>
+    </div>
+  </section>
+
+  <!-- RIGHT: stage -->
+  <section class="stage-wrap">
+    <div class="stage-head">
+      <div class="now">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">No scene loaded</span>
+      </div>
+      <div class="style-pill" id="stylePill">Style: —</div>
+    </div>
+    <div class="stage" id="stage">
+      <div class="stage-inner" id="stageInner">
+        <iframe id="player" title="Explainer player" sandbox="allow-scripts allow-same-origin"></iframe>
+        <div class="empty" id="emptyState">
+          <img src="icon.svg" alt="">
+          <h2>Nothing playing yet</h2>
+          <p>Paste the HTML Claude gives you, open an .html file, or watch the demo.</p>
+          <div class="row gap center">
+            <button class="btn primary" id="pasteCodeBtn">Paste Claude's code</button>
+            <label class="btn ghost file-btn">Open .html<input id="htmlFile" type="file" accept=".html,.htm,.txt" hidden></label>
+            <button class="btn ghost" id="demoBtn">Play demo</button>
+          </div>
+        </div>
+      </div>
+      <div class="rec-badge" id="recBadge" hidden>● REC <span id="recTime">0.0</span>s</div>
+    </div>
+    <div class="transport">
+      <button class="btn icon" id="restartBtn" title="Restart">⟲</button>
+      <button class="btn icon" id="playBtn" title="Play / pause">❚❚</button>
+      <div class="timebar"><div id="timeFill"></div></div>
+      <span class="time" id="timeLabel">0.0 / 0.0</span>
+      <button class="btn icon" id="soundBtn" title="Sound in scene">🔇</button>
+      <button class="btn icon" id="fullBtn" title="Fullscreen">⤢</button>
+    </div>
+    <div class="record-row">
+      <label class="btn ghost file-btn" title="Voiceover to record with the scene">🎙 <span id="audioName">Add voiceover</span><input id="audioFile" type="file" accept="audio/*" hidden></label>
+      <select id="recRes" class="input small" title="Recording size">
+        <option value="1">1080p</option><option value="0.6667">720p</option>
+      </select>
+      <button class="btn rec" id="recordBtn">● Record video</button>
+      <button class="btn ghost" id="downloadHtml">Download HTML</button>
+      <button class="btn ghost" id="pasteCodeBtn3">Replace code</button>
+    </div>
+    <p class="hint small-print">Recording captures the 3D canvas plus your voiceover, in real time. Keep this tab in front while it records.</p>
+  </section>
+</main>
+
+<!-- Paste modal -->
+<dialog id="pasteDlg" class="dlg">
+  <form method="dialog">
+    <h3>Paste Claude's code</h3>
+    <p class="hint">Paste the whole reply if you like — Ether Explains pulls out the HTML.</p>
+    <textarea id="pasteArea" class="input mono" rows="16" spellcheck="false"></textarea>
+    <div class="row gap end">
+      <button class="btn ghost" value="cancel">Cancel</button>
+      <button class="btn primary" id="pasteGo" value="ok">Play it</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Projects drawer -->
+<dialog id="projDlg" class="dlg">
+  <form method="dialog">
+    <h3>Projects</h3>
+    <div id="projList" class="proj-list"></div>
+    <div class="row gap end">
+      <label class="btn ghost file-btn">Import .json<input id="importFile" type="file" accept=".json" hidden></label>
+      <button class="btn ghost" id="exportBtn" type="button">Export current</button>
+      <button class="btn primary" value="close">Close</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="styles-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -110,7 +110,7 @@ for (let i = 0; i < 8; i++) {
   const mat = new THREE.ShaderMaterial({
     uniforms: { map: { value: moonMap }, uLight: { value: new THREE.Vector3(Math.sin(phi), 0.0, -Math.cos(phi)).normalize() } },
     vertexShader: 'varying vec3 vN; varying vec2 vUv; void main(){ vUv=uv; vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader: 'uniform sampler2D map; uniform vec3 uLight; varying vec3 vN; varying vec2 vUv; void main(){ vec3 c=texture2D(map,vUv).rgb; float d=smoothstep(-0.03,0.12,dot(normalize(vN),uLight)); gl_FragColor=vec4(c*(0.035+1.15*d),1.0); #include <colorspace_fragment> }'
+    fragmentShader: 'uniform sampler2D map;\nuniform vec3 uLight;\nvarying vec3 vN;\nvarying vec2 vUv;\nvoid main(){\n  vec3 c = texture2D(map, vUv).rgb;\n  float d = smoothstep(-0.03, 0.12, dot(normalize(vN), uLight));\n  gl_FragColor = vec4(c * (0.035 + 1.15 * d), 1.0);\n  #include <colorspace_fragment>\n}'
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(0.42, 40, 30), mat);
   strip.add(m); stripMoons.push(m);

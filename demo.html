@@ -244,7 +244,7 @@ function update(t) {
   strip.visible = ks > 0;
   stripMoons.forEach((m, i) => {
     const k = ease(ks * 1.25 - i * 0.03);
-    m.position.set((i - 3.5) * 1.05, lerp(-4.2, -1.45, k), -9);
+    m.position.set((i - 3.5) * 1.05, lerp(-4.2, -1.05, k), -9);
     m.scale.setScalar(Math.max(0.001, k));
   });
 

@@ -1,8 +1,14 @@
-# Ether Explains
+<p align="center"><img src="icon.svg" width="96" alt="Ether Explains"></p>
 
-Build 3D animated explainers with Claude and three.js, then play and record them. Part of the Ether family of apps.
+<h1 align="center">Ether Explains</h1>
 
-**Live app:** https://tonyparker1964.github.io/Ether-Explains/
+<p align="center">Build 3D animated explainers with Claude and three.js, then play and record them.<br>Part of the Ether family of apps.</p>
+
+<p align="center">
+  <a href="https://tonyparker1964.github.io/Ether-Explains/"><img src="https://img.shields.io/badge/%E2%96%B6%20Launch-Ether%20Explains-e8c37a?style=for-the-badge&labelColor=1d1838" alt="Launch Ether Explains"></a>
+</p>
+
+<p align="center"><b><a href="https://tonyparker1964.github.io/Ether-Explains/">tonyparker1964.github.io/Ether-Explains</a></b></p>
 
 ## How it works
 

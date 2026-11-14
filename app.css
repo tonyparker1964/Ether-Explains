@@ -91,7 +91,7 @@ details[open] summary{margin-bottom:8px}
 .card{border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;background:rgba(0,0,0,.25);text-align:left;padding:0;transition:transform .15s,border-color .15s}
 .card:hover{transform:translateY(-2px);border-color:rgba(232,195,122,.45)}
 .card.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 8px 30px rgba(232,195,122,.15)}
-.card .art{height:74px;position:relative;overflow:hidden}
+.card .art{height:96px;position:relative;overflow:hidden;background-size:cover;background-position:center}
 .card .art i{position:absolute;border-radius:50%;filter:blur(1px)}
 .card .num{position:absolute;top:6px;left:8px;font-size:10px;letter-spacing:.1em;color:rgba(255,255,255,.85);mix-blend-mode:difference}
 .card .meta{padding:8px 10px}
@@ -159,3 +159,7 @@ details[open] summary{margin-bottom:8px}
 .stage-alert{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:min(560px,92%);background:rgba(26,10,20,.94);border:1px solid rgba(255,77,109,.6);border-radius:14px;padding:14px 16px;z-index:3;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .stage-alert b{display:block;color:#ffb3c1;margin-bottom:6px;font-size:15px}
 .stage-alert pre{margin:0 0 12px;max-height:120px;overflow:auto;white-space:pre-wrap;font:12px/1.4 ui-monospace,Menlo,monospace;color:#f3dbe2}
+
+.card .art.has-img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25),transparent 40%)}
+.card .num{z-index:1}
+.cover-reset{display:inline-block;margin-top:8px;font-size:11px;color:var(--gold);text-decoration:underline;cursor:pointer}

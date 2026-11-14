@@ -17,6 +17,9 @@ let projects = {};
 try { projects = JSON.parse(localStorage.getItem(LS_PROJECTS) || '{}'); } catch { projects = {}; }
 let P = projects[localStorage.getItem(LS_CURRENT)] || blank();
 let saveTimer = null;
+const LS_COVERS = 'etherExplains.covers.v1';
+let covers = {};
+try { covers = JSON.parse(localStorage.getItem(LS_COVERS) || '{}'); } catch { covers = {}; }
 function save() {
   $('#saveState').textContent = 'Saving…';
   clearTimeout(saveTimer);
@@ -57,7 +60,9 @@ function renderChips() {
   $('#catChips').innerHTML = all.map(c => `<button class="chip ${c.id === catFilter ? 'active' : ''}" data-c="${c.id}">${c.name}</button>`).join('');
   $$('#catChips .chip').forEach(b => b.onclick = () => { catFilter = b.dataset.c; renderChips(); renderGallery(); });
 }
-function art(sw, i) {
+function art(sw, i, id) {
+  const cv = id && covers[id];
+  if (cv) return `<div class="art has-img" style="background-image:url('${cv.url}')"><span class="num">#${String(i + 1).padStart(2, '0')}</span></div>`;
   const [a, b, c] = sw;
   const r = n => ((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1;
   return `<div class="art" style="background:linear-gradient(${Math.round(r(1) * 360)}deg,${a},${b})">
@@ -74,10 +79,13 @@ function renderGallery() {
   $('#gallery').innerHTML = list.map(({ s, i }) => {
     const cat = CATS.find(c => c.id === s.cat)?.name || '';
     return `<button class="card ${!P.custom && s.id === P.styleId ? 'sel' : ''}" data-id="${s.id}">
-      ${art(s.swatch, i)}
+      ${art(s.swatch, i, s.id)}
       <div class="meta"><div class="nm">${esc(s.name)}</div><div class="sub">${esc(cat)} · ${esc(s.genre)}</div>
-      <div class="brief">${esc(s.brief)}</div></div></button>`;
+      <div class="brief">${esc(s.brief)}${covers[s.id] ? `<br><span class="cover-reset" data-reset="${s.id}">Reset cover</span>` : ''}</div></div></button>`;
   }).join('') || '<p class="hint">No styles match.</p>';
+  $$('#gallery .cover-reset').forEach(x => x.onclick = e => {
+    e.stopPropagation(); delete covers[x.dataset.reset]; storeCovers(); renderGallery(); toast('Cover removed.');
+  });
   $$('#gallery .card').forEach(c => c.onclick = () => {
     P.styleId = c.dataset.id; P.custom = null;
     const s = STYLES.find(x => x.id === P.styleId);
@@ -263,7 +271,7 @@ function setStatus(kind, text) { $('#statusDot').className = 'dot ' + kind; $('#
 function play(code, scale = 1) {
   if (!code) return;
   readyInfo = null; frameLoaded = false; lastErrors = []; loadT0 = performance.now();
-  hideAlert(); blackTimers.forEach(clearTimeout);
+  hideAlert(); blackTimers.forEach(clearTimeout); clearTimeout(coverTimer);
   $('#emptyState').hidden = true;
   setStatus('load', 'Loading scene…');
   layoutStage(scale);
@@ -285,6 +293,7 @@ window.addEventListener('message', e => {
     setStatus('ok', `Playing · ${readyInfo.duration}s`);
     const api = etherApi(); if (api && api.setMuted) try { api.setMuted(muted); } catch {}
     scheduleBlackCheck();
+    scheduleAutoCover(readyInfo.duration);
   } else if (d.type === 'ether-end') {
     if (!recording) setStatus('ok', 'Finished — press ⟲ to replay');
   } else if (d.type === 'ether-error') {
@@ -300,6 +309,54 @@ player.addEventListener('load', () => {
     if (!readyInfo && !lastErrors.length) { setStatus('ok', etherApi() ? 'Playing' : 'Playing (no ether API — basic controls only)'); scheduleBlackCheck(); }
   }, 2500);
 });
+/* style covers: a still frame from your own scene becomes the style's card picture */
+function storeCovers() {
+  try { localStorage.setItem(LS_COVERS, JSON.stringify(covers)); return true; }
+  catch { toast('Browser storage is full — remove some covers or old projects.'); return false; }
+}
+function grabFrame(maxDim = 560) {
+  try {
+    const doc = player.contentDocument;
+    const cv = doc && [...doc.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    if (!cv || !cv.width) return null;
+    const s = Math.min(1, maxDim / Math.max(cv.width, cv.height));
+    const out = document.createElement('canvas'); out.width = Math.round(cv.width * s); out.height = Math.round(cv.height * s);
+    const x = out.getContext('2d', { willReadFrequently: true });
+    x.drawImage(cv, 0, 0, out.width, out.height);
+    const px = x.getImageData(0, 0, out.width, out.height).data;
+    let max = 0;
+    for (let i = 0; i < px.length; i += 16) { const l = px[i] + px[i + 1] + px[i + 2]; if (l > max) max = l; }
+    return { url: out.toDataURL('image/jpeg', 0.82), max };
+  } catch { return null; }
+}
+function saveCover(styleId, manual) {
+  if (!styleId || styleId === 'custom') return 'custom';
+  if (!manual && covers[styleId] && covers[styleId].manual) return 'kept';
+  const f = grabFrame();
+  if (!f) return 'none';
+  if (f.max < 24) return 'black';
+  covers[styleId] = { url: f.url, manual: !!manual, at: Date.now() };
+  if (!storeCovers()) return 'full';
+  renderGallery();
+  return 'ok';
+}
+let coverTimer = null;
+function scheduleAutoCover(dur) {
+  clearTimeout(coverTimer);
+  const styleId = P.custom ? null : P.styleId;
+  if (!styleId) return;
+  coverTimer = setTimeout(() => { if (!P.custom && P.styleId === styleId) saveCover(styleId, false); }, Math.max(1500, (dur || 10) * 650));
+}
+$('#coverBtn').onclick = () => {
+  if (!currentCode()) return toast('Load a scene first.');
+  const s = styleOf();
+  const r = saveCover(P.custom ? 'custom' : P.styleId, true);
+  if (r === 'ok') toast(`This frame is now the ${s.name} cover.`);
+  else if (r === 'custom') toast('Covers are for the 37 gallery styles — pick one in the Style tab first.');
+  else if (r === 'black') toast('That frame is black — pause on a better moment and try again.');
+  else toast('Couldn\'t grab a frame from this scene.');
+};
+
 /* problem alerts on the stage */
 function showAlert(title, text) {
   if (recording) return;

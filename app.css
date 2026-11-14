@@ -155,3 +155,7 @@ details[open] summary{margin-bottom:8px}
   .stage{min-height:56vw}
   .project-name{width:150px}
 }
+
+.stage-alert{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:min(560px,92%);background:rgba(26,10,20,.94);border:1px solid rgba(255,77,109,.6);border-radius:14px;padding:14px 16px;z-index:3;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.stage-alert b{display:block;color:#ffb3c1;margin-bottom:6px;font-size:15px}
+.stage-alert pre{margin:0 0 12px;max-height:120px;overflow:auto;white-space:pre-wrap;font:12px/1.4 ui-monospace,Menlo,monospace;color:#f3dbe2}

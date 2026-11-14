@@ -263,6 +263,7 @@ function setStatus(kind, text) { $('#statusDot').className = 'dot ' + kind; $('#
 function play(code, scale = 1) {
   if (!code) return;
   readyInfo = null; frameLoaded = false; lastErrors = []; loadT0 = performance.now();
+  hideAlert(); blackTimers.forEach(clearTimeout);
   $('#emptyState').hidden = true;
   setStatus('load', 'Loading scene…');
   layoutStage(scale);
@@ -283,20 +284,64 @@ window.addEventListener('message', e => {
     readyInfo = { duration: Number(d.duration) || P.duration };
     setStatus('ok', `Playing · ${readyInfo.duration}s`);
     const api = etherApi(); if (api && api.setMuted) try { api.setMuted(muted); } catch {}
+    scheduleBlackCheck();
   } else if (d.type === 'ether-end') {
     if (!recording) setStatus('ok', 'Finished — press ⟲ to replay');
   } else if (d.type === 'ether-error') {
     if (!lastErrors.includes(d.message)) lastErrors.push(d.message);
     setStatus('err', 'Error: ' + d.message.slice(0, 90));
+    showAlert('The scene hit an error', lastErrors.slice(-3).join('\n'));
   }
 });
 player.addEventListener('load', () => {
   if (!player.srcdoc) return;
   frameLoaded = true;
   setTimeout(() => {
-    if (!readyInfo && !lastErrors.length) setStatus('ok', etherApi() ? 'Playing' : 'Playing (no ether API — basic controls only)');
+    if (!readyInfo && !lastErrors.length) { setStatus('ok', etherApi() ? 'Playing' : 'Playing (no ether API — basic controls only)'); scheduleBlackCheck(); }
   }, 2500);
 });
+/* problem alerts on the stage */
+function showAlert(title, text) {
+  if (recording) return;
+  $('#alertTitle').textContent = title; $('#alertText').textContent = text; $('#stageAlert').hidden = false;
+}
+function hideAlert() { $('#stageAlert').hidden = true; }
+$('#alertClose').onclick = hideAlert;
+$('#alertFix').onclick = () => { hideAlert(); showTab('revise'); toast('Copy the change prompt and paste it into the same Claude chat.'); };
+
+/* black-screen check: sample the scene canvas a few times; if every sample is (near) black, flag it */
+let blackTimers = [];
+function sampleCanvas() {
+  try {
+    const doc = player.contentDocument;
+    const cv = doc && [...doc.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    if (!cv || !cv.width) return { ok: false, why: 'no canvas' };
+    const t = document.createElement('canvas'); t.width = 48; t.height = 48;
+    const x = t.getContext('2d', { willReadFrequently: true });
+    x.drawImage(cv, 0, 0, 48, 48);
+    const px = x.getImageData(0, 0, 48, 48).data;
+    let max = 0, sum = 0;
+    for (let i = 0; i < px.length; i += 4) { const l = px[i] + px[i + 1] + px[i + 2]; sum += l; if (l > max) max = l; }
+    return { ok: true, max, avg: sum / (px.length / 4) };
+  } catch (e) { return { ok: false, why: String(e) }; }
+}
+function scheduleBlackCheck() {
+  blackTimers.forEach(clearTimeout); blackTimers = [];
+  const results = [];
+  [1200, 3500, 7000].forEach((ms, i, arr) => blackTimers.push(setTimeout(() => {
+    results.push(sampleCanvas());
+    if (results.length === arr.length) {
+      const good = results.filter(r => r.ok);
+      if (good.length && good.every(r => r.max < 24)) {
+        const api = etherApi();
+        const msg = `Player check: the canvas stays completely black while the scene runs (checked at ~1s, ~3s and ~7s${api ? '' : ', no window.ether API found'}). Make sure the renderer actually draws: lights are added and bright enough, the camera is outside the objects and looking at them, objects are added to the scene, renderer.render(scene, camera) runs every frame (and a HUD/second render pass doesn't clear the first one — use renderer.autoClear = false with a manual clear), and preserveDrawingBuffer: true is set.`;
+        if (!lastErrors.includes(msg)) lastErrors.push(msg);
+        setStatus('err', 'Scene is drawing only black');
+        showAlert('The scene is drawing only black', 'Every frame I checked is black. Usually that means no light, the camera is inside or behind something, or a second render pass wipes the picture. Get a fix prompt to send back to Claude.');
+      }
+    }
+  }, ms)));
+}
 function etherApi() { try { return player.contentWindow && player.contentWindow.ether; } catch { return null; } }
 
 /* stage layout: iframe renders at the target resolution, scaled to fit */

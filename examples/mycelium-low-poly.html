@@ -181,9 +181,9 @@ const leaves = new THREE.Group(); back.add(leaves);
 {
   const lr = rng(17);
   for (let i = 0; i < 6; i++) {
-    const g = new THREE.OctahedronGeometry(0.28, 0); g.scale(1.3, 0.12, 0.7);
+    const g = new THREE.OctahedronGeometry(0.42, 0); g.scale(1.3, 0.12, 0.7);
     const l = facet(g, [C.coral, C.sand, '#d9925a'][i % 3], { seed: 80 + i, vary: 0.08 });
-    l.position.set(1.15 + (lr() - .5) * 0.8, 0.07 + i * 0.025, -0.5 + (lr() - .5) * 0.5);
+    l.position.set(1.05 + (lr() - .5) * 0.9, 0.09 + i * 0.03, -0.35 + (lr() - .5) * 0.4);
     l.rotation.set((lr() - .5) * 0.4, lr() * 6, (lr() - .5) * 0.3);
     l.userData.home = l.position.clone(); l.userData.rot = l.rotation.clone();
     leaves.add(l);
@@ -260,12 +260,12 @@ function addHypha(points, d0, group, radius) {
       if (ny < YBOT) { ny = YBOT; a = Math.abs(a) * 0.6 + 0.3; }
       if (nx < XMIN || nx > XMAX) break;
       p = new THREE.Vector3(nx, ny, Z); pts.push(p); d += step;
-      if (depth < 4 && i > 1 && r() < 0.32) walk(p, a + (r() < .5 ? 1 : -1) * (0.5 + r() * 0.7), d, depth + 1, Math.floor(steps * 0.7));
+      if (depth < 3 && i > 2 && r() < 0.2) walk(p, a + (r() < .5 ? 1 : -1) * (0.5 + r() * 0.7), d, depth + 1, Math.floor(steps * 0.7));
     }
-    if (pts.length > 2) addHypha(pts, d0, 'net', Math.max(0.011, 0.026 - depth * 0.004));
+    if (pts.length > 2) addHypha(pts, d0, 'net', Math.max(0.016, 0.03 - depth * 0.005));
   }
-  for (let k = 0; k < 7; k++) {
-    const a = -Math.PI / 2 + (k - 3) * 0.42 + (r() - .5) * 0.2;
+  for (let k = 0; k < 5; k++) {
+    const a = -Math.PI / 2 + (k - 2) * 0.62 + (r() - .5) * 0.2;
     walk(MUSH_BASE, a, 0, 0, 16 + Math.floor(r() * 8));
   }
   // stem threads into the mushroom base
@@ -295,9 +295,9 @@ function speckSet(n, color, size) {
   }
   return arr;
 }
-const nutrientSpecks = speckSet(10, '#ffd38a', 0.05);
-const sugarSpecks = speckSet(10, C.gold, 0.055);
-const mineralSpecks = speckSet(10, '#5fd6c6', 0.05);
+const nutrientSpecks = speckSet(12, '#ffcf7a', 0.085);
+const sugarSpecks = speckSet(12, '#ffbe3d', 0.09);
+const mineralSpecks = speckSet(12, '#34c6b3', 0.085);
 
 /* ---------- HUD (all text drawn inside the canvas) ---------- */
 const HUD_SCALE = 0.75;
@@ -320,8 +320,8 @@ const LABELS = [ // [start, end, text, () => world point]
   [1.6, 4.0, 'fruiting body', () => mush.localToWorld(new THREE.Vector3(0.45, 0.95, 0))],
   [6.2, 8.2, 'mycelium', () => back.localToWorld(new THREE.Vector3(-1.3, -1.6, Z))],
   [9.6, 12.2, 'hypha', () => back.localToWorld(hyphaeTip())],
-  [12.8, 15.6, 'dead leaves', () => back.localToWorld(new THREE.Vector3(1.25, 0.25, -0.5))],
-  [16.8, 20.5, 'tree roots', () => back.localToWorld(rootTips[6].clone().add(new THREE.Vector3(0.1, -0.05, 0)))]
+  [12.8, 15.6, 'dead leaves', () => back.localToWorld(new THREE.Vector3(1.05, 0.2, -0.35))],
+  [16.8, 20.5, 'tree roots', () => back.localToWorld(new THREE.Vector3(-2.1, -0.95, Z))]
 ];
 let tipCache = null;
 function hyphaeTip() {
@@ -456,7 +456,7 @@ function update(t) {
     const h = leafThreads[i % 2];
     const life = span(t, 13.6, 14.2) * (1 - span(t, 16.0, 16.6));
     const u = ((t * 0.32 + i * 0.137) % 1);
-    m.position.copy(at(h.curve, 1 - u)); m.position.z += 0.03;
+    m.position.copy(at(h.curve, 1 - u)); m.position.z += 0.06;
     m.material.opacity = life * Math.sin(u * Math.PI);
     m.visible = life > 0.01;
   });
@@ -465,12 +465,12 @@ function update(t) {
   const trade = span(t, 17.4, 18.0);
   sugarSpecks.forEach((m, i) => {
     const h = rootThreads[i % 4], u = ((t * 0.3 + i * 0.21) % 1);
-    m.position.copy(at(h.curve, 1 - u)); m.position.z += 0.03;   // root → web
+    m.position.copy(at(h.curve, 1 - u)); m.position.z += 0.06;   // root → web
     m.material.opacity = trade * Math.sin(u * Math.PI); m.visible = trade > 0.01;
   });
   mineralSpecks.forEach((m, i) => {
     const h = rootThreads[(i + 1) % 4], u = ((t * 0.3 + i * 0.17 + 0.5) % 1);
-    m.position.copy(at(h.curve, u)); m.position.z += 0.035;       // web → root
+    m.position.copy(at(h.curve, u)); m.position.z += 0.07;       // web → root
     m.material.opacity = trade * Math.sin(u * Math.PI); m.visible = trade > 0.01;
   });
 

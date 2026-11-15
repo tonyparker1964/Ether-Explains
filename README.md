@@ -14,12 +14,18 @@
 
 1. **Style.** Pick one of 37 looks: Low-Poly, Paper Pop-Up, Glass and Light, Circuit City and more. You can also paste your own style prompt.
 2. **Story.** Enter the topic, length, aspect ratio (16:9, 9:16 or 1:1), tone and palette. Paste your voiceover's SRT so each beat lands on its line, or write the script and let the app estimate the timing.
-3. **Prompt.** Copy the generated prompt into Claude. It asks for one self-contained three.js HTML file that follows the player rules below.
-4. **Play.** Paste Claude's reply, or open a saved .html file. It plays in the stage with play/pause, seek, restart, sound and fullscreen.
-5. **Revise.** Describe a change, and any player errors are added automatically. Copy the change prompt back to Claude. Each version is kept.
-6. **Record.** Add your voiceover file and press Record. The canvas and the audio are captured together and downloaded as MP4 (Safari, newer Chrome) or WebM.
+3. **Voice.** Give the explainer its voice, and let the voice set the timing:
+   - **Read it myself:** a teleprompter shows each line; press Space as you start the next one. Your take is recorded and lined up line by line.
+   - **Voice file:** load any voiceover (your recording, a WAV from Ether Reader in your voice, a Mac `say` file). Ether Explains finds the pauses and lines each sentence up with its words.
+   - **Mac voice:** pick a system voice, time your lines with it, read along with the scene, or copy a Terminal command that saves it as a WAV.
+   The waveform shows every cue; drag an edge to fine-tune, and nudge when the voice starts. The cues become the narration timing in the prompt.
+4. **Prompt.** Copy the generated prompt into Claude. It asks for one self-contained three.js HTML file that follows the player rules below.
+5. **Play.** Paste Claude's reply, or open a saved .html file. The voice plays locked to the scene's clock (play, pause, seek and restart all stay in sync).
+6. **Revise.** Describe a change, and any player errors are added automatically. Tick *Retime to the latest voice cues* to have Claude move the beats onto a new take. Each version is kept.
+7. **Record.** Press Record. The canvas and the voice are captured together; the voice is the master clock and the scene is kept on it. Downloads as MP4 (Safari, newer Chrome) or WebM.
+8. **Edit in Ether's Cut.** Press ✂ Edit in Ether's Cut (or switch to the Ether's Cut view) and the recording opens in the editor with its voice: trim, add music, text, layers, effects and export.
 
-There are no API keys or accounts. Projects are saved in your browser, and you can export or import them as .json.
+There are no API keys or accounts. Projects and voices are saved in your browser on this Mac, and you can export or import projects as .json.
 
 ## Player rules (what the prompt asks Claude for)
 

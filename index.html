@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=6">
+<link rel="stylesheet" href="app.css?v=7">
 </head>
 <body>
 <div class="aether" aria-hidden="true"></div>
@@ -24,6 +24,10 @@
       <p class="tag">3D explainers, written in light</p>
     </div>
   </div>
+  <div class="seg mode-seg" id="modeSeg" role="tablist" aria-label="View">
+    <button class="active" data-view="studio">Studio</button>
+    <button data-view="cut">✂ Ether's Cut</button>
+  </div>
   <div class="project-bar">
     <input id="projectName" class="project-name" placeholder="Untitled explainer" aria-label="Project name">
     <span id="saveState" class="save-state">Saved</span>
@@ -32,14 +36,15 @@
   </div>
 </header>
 
-<main class="layout">
+<main class="layout" id="studioView">
   <!-- LEFT: steps -->
   <section class="panel">
     <nav class="steps" role="tablist">
       <button class="step active" data-tab="style" role="tab"><span>1</span>Style</button>
       <button class="step" data-tab="story" role="tab"><span>2</span>Story</button>
-      <button class="step" data-tab="prompt" role="tab"><span>3</span>Prompt</button>
-      <button class="step" data-tab="revise" role="tab"><span>4</span>Revise</button>
+      <button class="step" data-tab="voice" role="tab"><span>3</span>Voice</button>
+      <button class="step" data-tab="prompt" role="tab"><span>4</span>Prompt</button>
+      <button class="step" data-tab="revise" role="tab"><span>5</span>Revise</button>
     </nav>
 
     <!-- STYLE -->
@@ -103,6 +108,93 @@
         <summary>How to get an SRT from a voiceover</summary>
         <p>Make your voiceover (your own voice, or a TTS tool like Google AI Studio), then ask a transcription tool to "transcribe this audio as an SRT file with sentence-level timestamps." Paste the result above. Keep the audio file — you'll load it when recording.</p>
       </details>
+      <button class="btn primary wide" data-goto="voice">Add the voice →</button>
+    </div>
+
+    <!-- VOICE -->
+    <div class="tab" id="tab-voice">
+      <div class="subhead">Voice reader</div>
+      <p class="hint">Give the explainer its voice. The voice's real timing becomes the narration cues, so Claude builds each beat on its line, and the voice plays locked to the picture in the player and in the recording.</p>
+
+      <div class="vcard" id="vCard">
+        <div class="vcard-main"><b id="vName">No voice yet</b><span id="vMeta">Read it yourself, load a voice file, or use a Mac voice.</span></div>
+        <div class="row gap" id="vCardBtns" hidden>
+          <button class="btn ghost" id="vPlay" type="button">▶ Listen</button>
+          <button class="btn ghost" id="vSave" type="button" title="Download the voice as a WAV file">⤓</button>
+          <button class="btn ghost" id="vRemove" type="button" title="Remove this voice">✕</button>
+        </div>
+      </div>
+
+      <label class="field"><span>Lines to read — one per line</span>
+        <textarea id="vLines" class="input" rows="6" placeholder="The Moon makes no light of its own.&#10;Sunlight always lights half of it.&#10;…"></textarea>
+      </label>
+      <div class="row gap vline-tools">
+        <button class="btn ghost" id="vFromStory" type="button">Pull from Story</button>
+        <span class="hint" id="vLineCount"></span>
+      </div>
+
+      <div class="seg" id="voiceMode">
+        <button class="active" data-vm="record">🎙 Read it myself</button>
+        <button data-vm="file">📂 Voice file</button>
+        <button data-vm="mac">🗣 Mac voice</button>
+      </div>
+
+      <!-- record yourself -->
+      <div class="vpane" id="vm-record">
+        <div class="row gap">
+          <select id="micSel" class="input small grow" aria-label="Microphone"><option value="">Default microphone</option></select>
+          <div class="meter" title="Mic level"><i id="micLevel"></i></div>
+        </div>
+        <div class="prompter" id="prompter">
+          <div class="p-prev" id="pPrev"></div>
+          <div class="p-cur" id="pCur">Press Start, then read each line. Press <kbd>Space</kbd> as you begin the next one.</div>
+          <div class="p-next" id="pNext"></div>
+          <div class="p-rec" id="pRec" hidden>● <span id="pTime">0.0</span>s · line <span id="pIdx">1</span>/<span id="pTot">0</span></div>
+        </div>
+        <div class="row gap">
+          <button class="btn primary" id="readStart" type="button">● Start reading</button>
+          <button class="btn" id="readNext" type="button" hidden>Next line ␣</button>
+          <button class="btn ghost" id="readStop" type="button" hidden>■ Finish</button>
+          <button class="btn ghost" id="readCancel" type="button" hidden>Cancel</button>
+        </div>
+        <p class="hint">Headphones help. Your recording stays on this Mac (saved in this browser with the project).</p>
+      </div>
+
+      <!-- voice file -->
+      <div class="vpane" id="vm-file" hidden>
+        <p class="hint">Any voiceover works: your own recording, a WAV from Ether Reader in your voice, or a Mac voice file (see 🗣). Ether Explains finds the pauses and lines each sentence up with its words.</p>
+        <div class="row gap">
+          <label class="btn file-btn">📂 Load voice file<input id="vFile" type="file" accept="audio/*,.wav,.m4a,.mp3,.aiff,.aif,.caf,.webm,.ogg" hidden></label>
+          <button class="btn primary" id="vAlign" type="button">Line it up with my lines</button>
+        </div>
+      </div>
+
+      <!-- mac voice -->
+      <div class="vpane" id="vm-mac" hidden>
+        <div class="grid2">
+          <label class="field"><span>Voice</span><select id="macVoice" class="input"></select></label>
+          <label class="field"><span>Speed <b id="macRateV">1.0×</b></span><input id="macRate" type="range" min="0.7" max="1.4" step="0.05" value="1"></label>
+        </div>
+        <div class="row gap">
+          <button class="btn" id="macTest" type="button">▶ Hear it</button>
+          <button class="btn primary" id="macTime" type="button">Time my lines with this voice</button>
+          <button class="btn" id="macAlong" type="button">▶ Read along with the scene</button>
+        </div>
+        <p class="hint">Read-along speaks each line on its cue and holds the picture if a line runs long, so they never drift. Browsers can't record Mac voices directly, so to put one in the video, make a voice file on your Mac:</p>
+        <div class="row gap"><button class="btn ghost" id="macCmd" type="button">Copy Terminal command</button></div>
+        <p class="hint small">Paste it in Terminal and press Return. It saves a WAV to your Desktop. Then load it in 📂 Voice file and press Line it up.</p>
+      </div>
+
+      <div id="vTimeline" hidden>
+        <div class="subhead">Timing</div>
+        <p class="hint">Drag a cue's edge to adjust it. Click anywhere to listen from there.</p>
+        <div class="wave-wrap"><canvas id="vWave" height="96"></canvas></div>
+        <label class="field inline"><span>Voice starts at</span>
+          <input id="vOffset" type="range" min="-2" max="3" step="0.05" value="0" class="grow">
+          <b id="vOffsetV" class="mono">0.00s</b></label>
+        <ol class="vcues" id="vCues"></ol>
+      </div>
+      <label class="check"><input type="checkbox" id="vSync" checked> Play the voice with the scene in the player</label>
       <button class="btn primary wide" data-goto="prompt">Build the prompt →</button>
     </div>
 
@@ -129,6 +221,7 @@
       <p class="hint">Describe what to change. Errors from the player are added automatically.</p>
       <textarea id="changeReq" class="input" rows="5" placeholder="e.g. Slow the camera in beat 2, make the Moon brighter, move the caption higher"></textarea>
       <div id="errorBox" class="error-box" hidden></div>
+      <label class="check"><input type="checkbox" id="includeTiming"> Retime to the latest voice cues</label>
       <label class="check"><input type="checkbox" id="includeCode" checked> Include the current code (for a new Claude chat)</label>
       <textarea id="reviseOut" class="input mono" rows="10" spellcheck="false" readonly></textarea>
       <div class="row gap">
@@ -175,6 +268,7 @@
       <button class="btn icon" id="playBtn" title="Play / pause">❚❚</button>
       <div class="timebar"><div id="timeFill"></div></div>
       <span class="time" id="timeLabel">0.0 / 0.0</span>
+      <button class="btn icon" id="voiceBtn" title="Voice" hidden>🗣</button>
       <button class="btn icon" id="soundBtn" title="Sound in scene">🔇</button>
       <button class="btn icon" id="fullBtn" title="Fullscreen">⤢</button>
     </div>
@@ -184,13 +278,18 @@
         <option value="1">1080p</option><option value="0.6667">720p</option>
       </select>
       <button class="btn rec" id="recordBtn">● Record video</button>
+      <button class="btn cut" id="cutBtn" disabled title="Open your last recording in the Ether's Cut editor">✂ Edit in Ether's Cut</button>
       <button class="btn ghost" id="coverBtn" title="Use the frame on screen as this style's picture in the gallery">🖼 Set as cover</button>
       <button class="btn ghost" id="downloadHtml">Download HTML</button>
       <button class="btn ghost" id="pasteCodeBtn3">Replace code</button>
     </div>
-    <p class="hint small-print">Recording captures the 3D canvas plus your voiceover, in real time. Keep this tab in front while it records.</p>
+    <p class="hint small-print">Recording captures the 3D canvas plus your voice, locked together in real time. Keep this tab in front while it records.</p>
   </section>
 </main>
+
+<section class="cut-view" id="cutView" hidden>
+  <iframe id="cutFrame" title="Ether's Cut editor" allow="autoplay; fullscreen"></iframe>
+</section>
 
 <!-- Paste modal -->
 <dialog id="pasteDlg" class="dlg">
@@ -220,7 +319,9 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="styles-data.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="styles-data.js?v=7"></script>
+<script src="voice-dsp.js?v=7"></script>
+<script src="app.js?v=7"></script>
+<script src="voice.js?v=7"></script>
 </body>
 </html>

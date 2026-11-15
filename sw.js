@@ -1,6 +1,6 @@
 // Ether Explains — offline shell cache (network first, cache fallback)
-const CACHE = 'ether-explains-v4';
-const SHELL = ['./', 'index.html', 'app.css?v=6', 'app.js?v=6', 'styles-data.js?v=6', 'demo.html', 'icon.svg', 'manifest.webmanifest'];
+const CACHE = 'ether-explains-v5';
+const SHELL = ['./', 'index.html', 'app.css?v=7', 'app.js?v=7', 'voice-dsp.js?v=7', 'voice.js?v=7', 'styles-data.js?v=7', 'demo.html', 'cut.html?v=7', 'icon.svg', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {

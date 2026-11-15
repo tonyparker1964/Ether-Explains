@@ -222,16 +222,18 @@ function buildRevise() {
   const code = currentCode();
   const req = $('#changeReq').value.trim();
   const errs = lastErrors.length ? `\nERRORS FROM THE PLAYER (fix these first):\n${lastErrors.slice(-6).join('\n')}\n` : '';
+  const cc = $('#includeTiming').checked ? cues() : [];
+  const timing = cc.length ? `\nRETIME TO THE VOICEOVER — the narration is fixed; move each beat so its idea is on screen during its cue window, and set duration to at least ${Math.ceil(cc[cc.length - 1].end + 0.8)}s:\n${cc.map(x => `[${x.start.toFixed(2)}s – ${x.end.toFixed(2)}s] ${x.text}`).join('\n')}\n` : '';
   $('#errorBox').hidden = !lastErrors.length; $('#errorBox').textContent = lastErrors.slice(-6).join('\n');
   const out = `Update this "Ether Explains" three.js scene.
 
-CHANGE: ${req || (lastErrors.length ? 'Fix the errors below.' : '[describe the change]')}
-${errs}
+CHANGE: ${req || (lastErrors.length ? 'Fix the errors below.' : timing ? 'Retime the scene to the voiceover cues below.' : '[describe the change]')}
+${errs}${timing}
 Keep everything else as it is and keep following the player rules: one self-contained HTML file, three.js ${THREE_VER} via import map, all text inside the canvas, the window.ether API (duration, time, playing, play, pause, seek, restart, setMuted) and the ether-ready / ether-end messages. Return the complete updated HTML file in one \`\`\`html code block.${$('#includeCode').checked && code ? `\n\nCURRENT CODE:\n\`\`\`html\n${code}\n\`\`\`` : ''}`;
   $('#reviseOut').value = out;
   return out;
 }
-$('#changeReq').oninput = buildRevise; $('#includeCode').onchange = buildRevise;
+$('#changeReq').oninput = buildRevise; $('#includeCode').onchange = buildRevise; $('#includeTiming').onchange = buildRevise;
 $('#copyRevise').onclick = async () => { await copy(buildRevise()); toast('Change prompt copied.'); };
 function renderVersions() {
   const v = P.versions || [];
@@ -423,6 +425,7 @@ function tick() {
   $('#timeLabel').textContent = `${t.toFixed(1)} / ${Number(d).toFixed(1)}`;
   $('#playBtn').textContent = playing ? '❚❚' : '▶';
   if (recording) $('#recTime').textContent = ((performance.now() - recording.t0) / 1000).toFixed(1);
+  syncVoice(api);
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
@@ -458,15 +461,91 @@ $('#downloadHtml').onclick = () => {
 const slug = () => (P.name || P.topic || 'ether-explains').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'ether-explains';
 function dl(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 
-/* ---------------- recording ---------------- */
-let voice = null; // { file, url, name }
+/* ---------------- voice (shared by the Voice tab, the player and the recorder) ---------------- */
+const DSP = window.EtherVoiceDSP;
+let voice = null; // { blob, url, name, duration, an }
+const voiceListeners = [];
+const idb = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('etherExplains', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('voices');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const run = (mode, fn) => open().then(db => new Promise((res, rej) => {
+    const t = db.transaction('voices', mode), req = fn(t.objectStore('voices'));
+    t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error);
+  }));
+  return { get: k => run('readonly', s => s.get(k)), put: (k, v) => run('readwrite', s => s.put(v, k)), del: k => run('readwrite', s => s.delete(k)) };
+})();
+async function setVoice(blob, name, { persist = true, quiet = false } = {}) {
+  previewAudio.pause();
+  if (voice) URL.revokeObjectURL(voice.url);
+  if (!blob) {
+    voice = null; P.voiceName = ''; save();
+    if (persist) idb.del(P.id).catch(() => {});
+    updateVoiceUi(); return null;
+  }
+  const v = { blob, url: URL.createObjectURL(blob), name: name || 'voice', duration: 0, an: null };
+  voice = v; previewAudio.src = v.url;
+  try { const au = await DSP.decode(blob); v.duration = au.duration; v.an = DSP.analyze(au); v.au = au; }
+  catch (e) { v.duration = await audioDuration(v.url); if (!quiet) toast('That audio plays, but it couldn\'t be analysed for auto line-up.'); }
+  if (voice !== v) return v;
+  P.voiceName = v.name; save();
+  if (persist) idb.put(P.id, { blob, name: v.name }).catch(() => toast('Voice is loaded but couldn\'t be saved in the browser.'));
+  updateVoiceUi();
+  if (!quiet) toast(`Voice ready: ${v.name} · ${v.duration.toFixed(1)}s`);
+  return v;
+}
+async function loadVoiceFor(id) {
+  const want = id;
+  let rec = null; try { rec = await idb.get(id); } catch {}
+  if (P.id !== want) return;
+  if (rec && rec.blob) await setVoice(rec.blob, rec.name, { persist: false, quiet: true });
+  else if (voice) { previewAudio.pause(); URL.revokeObjectURL(voice.url); voice = null; updateVoiceUi(); }
+}
+function updateVoiceUi() {
+  const n = voice ? voice.name : 'Add voiceover';
+  $('#audioName').textContent = n.length > 22 ? n.slice(0, 20) + '…' : n;
+  $('#voiceBtn').hidden = !voice;
+  $('#voiceBtn').textContent = P.voiceSync === false ? '🗣̸' : '🗣';
+  $('#voiceBtn').title = P.voiceSync === false ? 'Voice is off in the player — click to play it with the scene' : 'Voice plays locked to the scene — click to turn it off';
+  voiceListeners.forEach(f => { try { f(voice); } catch (e) { console.warn(e); } });
+}
 $('#audioFile').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
-  if (voice) URL.revokeObjectURL(voice.url);
-  voice = { file: f, url: URL.createObjectURL(f), name: f.name };
-  $('#audioName').textContent = f.name.length > 22 ? f.name.slice(0, 20) + '…' : f.name;
-  e.target.value = '';
+  setVoice(f, f.name); e.target.value = '';
 };
+
+/* the voice follows the scene's clock while you preview, so what you see is what will be recorded */
+const previewAudio = new Audio(); previewAudio.preload = 'auto';
+let voiceHold = false, playBlockedUntil = 0;
+function syncVoice(api) {
+  if (!voice || recording) return;
+  if (voiceHold || P.voiceSync === false || !api) { if (!previewAudio.paused) previewAudio.pause(); return; }
+  let t, playing; try { t = api.time || 0; playing = !!api.playing; } catch { return; }
+  const target = t - (P.voiceOffset || 0), dur = voice.duration || previewAudio.duration || 0;
+  const inRange = target >= 0 && (!dur || target < dur - 0.03);
+  if (playing && inRange) {
+    const drift = target - previewAudio.currentTime; // + means the voice is behind the picture
+    if (previewAudio.paused) {
+      try { previewAudio.currentTime = target + 0.04; } catch {}
+      if (performance.now() > playBlockedUntil) previewAudio.play().catch(() => { playBlockedUntil = performance.now() + 1500; });
+    } else if (Math.abs(drift) > 0.3) { try { previewAudio.currentTime = target; } catch {} }
+    else {
+      // small drift: ease the voice's speed a touch so it slides back into place without a jump
+      const r = Math.abs(drift) < 0.015 ? 1 : 1 + Math.max(-0.08, Math.min(0.08, drift * 0.6));
+      if (Math.abs(previewAudio.playbackRate - r) > 0.004) previewAudio.playbackRate = r;
+    }
+  } else {
+    if (previewAudio.playbackRate !== 1) previewAudio.playbackRate = 1;
+    if (!previewAudio.paused) previewAudio.pause();
+    if (inRange && Math.abs(previewAudio.currentTime - target) > 0.05) { try { previewAudio.currentTime = target; } catch {} }
+  }
+}
+$('#voiceBtn').onclick = () => { P.voiceSync = P.voiceSync === false; save(); updateVoiceUi(); };
+
+/* ---------------- recording ---------------- */
 function pickMime() {
   const opts = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
   return opts.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
@@ -490,12 +569,13 @@ $('#recordBtn').onclick = async () => {
   if (api) { try { api.pause(); api.seek(0); } catch {} }
   await new Promise(r => setTimeout(r, 300));
 
+  previewAudio.pause();
   const stream = canvas.captureStream(60);
-  let ac = null, voiceEl = null;
+  let ac = null, voiceEl = null, ownAc = false;
   try {
     const sceneSound = api && api.audioContext && api.masterGain && P.withSound;
     if (voice || sceneSound) {
-      ac = sceneSound ? api.audioContext : new AudioContext();
+      ac = sceneSound ? api.audioContext : new AudioContext(); ownAc = !sceneSound;
       const dest = ac.createMediaStreamDestination();
       if (sceneSound) { api.masterGain.connect(dest); try { api.setMuted(false); } catch {} }
       if (voice) {
@@ -510,8 +590,10 @@ $('#recordBtn').onclick = async () => {
   } catch (err) { console.warn(err); toast('Audio couldn\'t be attached — recording video only.'); }
 
   const sceneDur = (api && api.duration) || readyInfo?.duration || P.duration;
-  const vDur = voice ? await audioDuration(voice.url) : 0;
-  const total = Math.max(sceneDur, vDur || 0) + 0.4;
+  const off = voice ? (P.voiceOffset || 0) : 0;
+  let vDur = voice ? (voice.duration || await audioDuration(voice.url)) : 0;
+  if (!isFinite(vDur)) vDur = 0;
+  const total = Math.max(sceneDur, vDur ? vDur + off : 0) + 0.4;
   const mime = pickMime();
   const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: scale >= 1 ? 16e6 : 8e6, audioBitsPerSecond: 192000 } : undefined);
   const chunks = [];
@@ -519,20 +601,40 @@ $('#recordBtn').onclick = async () => {
   rec.onstop = () => {
     const type = rec.mimeType || mime || 'video/webm';
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
-    dl(new Blob(chunks, { type }), `${slug()}.${ext}`);
-    toast(`Saved ${slug()}.${ext}${ext === 'webm' ? ' — open in Chrome or convert to MP4 for editing.' : ''}`, 4500);
+    const blob = new Blob(chunks, { type });
+    lastTake = { blob, name: `${slug()}.${ext}`, type, aspect: P.aspect, seconds: (performance.now() - recT0) / 1000 };
+    $('#cutBtn').disabled = false;
+    if (ownAc) ac.close().catch(() => {});
+    dl(blob, lastTake.name);
+    toast(`Saved ${lastTake.name} — press ✂ Edit in Ether's Cut to cut it.`, 4500);
   };
-  recording = { rec, t0: performance.now(), scale, voiceEl, timer: null };
+  const recT0 = performance.now();
+  recording = { rec, t0: recT0, scale, voiceEl, timer: null, sync: null, vStart: null };
   rec.start(250);
-  if (api) { try { api.restart ? api.restart() : (api.seek(0), api.play()); } catch {} }
-  if (voiceEl) voiceEl.play().catch(() => toast('Voiceover could not start.'));
+  const startScene = () => { if (api) { try { api.restart ? api.restart() : (api.seek(0), api.play()); } catch {} } };
+  if (!voiceEl) startScene();
+  else {
+    // the voice is the master clock: start it at the offset, then keep nudging the scene onto it
+    const go = () => voiceEl.play().catch(() => toast('Voiceover could not start.'));
+    try { voiceEl.currentTime = Math.max(0, -off); } catch {}
+    if (off > 0) { startScene(); recording.vStart = setTimeout(go, off * 1000); }
+    else { await Promise.race([go(), new Promise(r => setTimeout(r, 1500))]); startScene(); }
+    recording.sync = setInterval(() => {
+      if (!recording || voiceEl.paused || voiceEl.ended) return;
+      const a = etherApi(); if (!a) return;
+      try {
+        const want = voiceEl.currentTime + off;
+        if (a.playing && want < a.duration - 0.05 && Math.abs(a.time - want) > 0.09) a.seek(want);
+      } catch {}
+    }, 200);
+  }
   btn.disabled = false; btn.textContent = '■ Stop'; btn.classList.add('on');
   $('#recBadge').hidden = false; setStatus('err', 'Recording…');
   recording.timer = setTimeout(() => stopRecording(false), total * 1000);
 };
 function stopRecording(manual) {
   if (!recording) return;
-  clearTimeout(recording.timer);
+  clearTimeout(recording.timer); clearTimeout(recording.vStart); clearInterval(recording.sync);
   try { recording.rec.state !== 'inactive' && recording.rec.stop(); } catch {}
   try { recording.voiceEl && recording.voiceEl.pause(); } catch {}
   recording = null;
@@ -542,10 +644,36 @@ function stopRecording(manual) {
   setTimeout(() => layoutStage(1), 100);
 }
 
+/* ---------------- Ether's Cut (editor, in its own view) ---------------- */
+let lastTake = null; // last recording { blob, name, type, aspect }
+const cutFrame = $('#cutFrame');
+let cutReady = null;
+function showView(v) {
+  $$('#modeSeg button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  $('#studioView').hidden = v !== 'studio'; $('#cutView').hidden = v !== 'cut';
+  document.body.classList.toggle('in-cut', v === 'cut');
+  if (v === 'cut') {
+    previewAudio.pause(); voiceHold = true;
+    const a = etherApi(); if (a && !recording) try { a.pause(); } catch {}
+    if (!cutReady) cutReady = new Promise(res => { cutFrame.addEventListener('load', () => res(cutFrame.contentWindow), { once: true }); cutFrame.src = 'cut.html?v=7'; });
+  } else { voiceHold = false; setTimeout(() => layoutStage(), 30); }
+}
+$$('#modeSeg button').forEach(b => b.onclick = () => showView(b.dataset.view));
+async function sendToCut(take) {
+  if (!take) return toast('Record a video first — it goes straight into Ether\'s Cut.');
+  showView('cut');
+  const w = await cutReady;
+  const br = await waitFor(() => w.EtherCutBridge, 8000);
+  if (!br) return toast('Ether\'s Cut didn\'t open — add the file with + Video there.');
+  br.importFromExplains(new File([take.blob], take.name, { type: take.type }), take.aspect, take.seconds);
+}
+$('#cutBtn').onclick = () => sendToCut(lastTake);
+
 /* ---------------- projects ---------------- */
 function loadProject(p) {
   P = p; localStorage.setItem(LS_CURRENT, P.id);
   bindAll(); renderGallery(); updatePill(); renderCues(); lastErrors = [];
+  loadVoiceFor(P.id); if (window.EtherVoice) window.EtherVoice.refresh();
   const code = currentCode();
   if (code) play(code); else { player.removeAttribute('srcdoc'); player.src = 'about:blank'; $('#emptyState').hidden = false; setStatus('', 'No scene loaded'); }
   layoutStage();
@@ -578,6 +706,15 @@ $('#importFile').onchange = async e => {
 /* ---------------- boot ---------------- */
 renderChips(); bindAll(); renderGallery(); updatePill(); renderCues(); layoutStage();
 if (currentCode()) play(currentCode());
+loadVoiceFor(P.id);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 window.EtherExplains = { buildPrompt, parseCues, extractHtml, get project() { return P; } };
+/* internals the Voice tab (voice.js) builds on */
+window.EE = {
+  get P() { return P; }, get voice() { return voice; }, get recording() { return !!recording; },
+  set voiceHold(v) { voiceHold = v; }, get lastTake() { return lastTake; },
+  save, toast, esc, cues, parseCues, fmtSrt, renderCues, setTimingMode, showTab, etherApi, setVoice, updateVoiceUi,
+  onVoice: f => voiceListeners.push(f), previewAudio, slug, dl, sendToCut, play, currentCode,
+  setDuration(d) { P.duration = d; $('#duration').value = d; },
+};
 })();

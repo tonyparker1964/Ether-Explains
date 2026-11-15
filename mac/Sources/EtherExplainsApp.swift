@@ -32,7 +32,11 @@ struct EtherExplainsApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var activity: NSObjectProtocol?
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // no App Nap: playback and recording keep real time even when the app isn't in front
+        activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical],
+                                                         reason: "Playing and recording explainers")
         try? FileManager.default.createDirectory(at: Paths.saveDir, withIntermediateDirectories: true)
         _ = LocalServer.shared.start()
     }

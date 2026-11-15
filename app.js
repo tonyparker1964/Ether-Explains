@@ -289,16 +289,24 @@ function releaseGl() {
   } catch {}
 }
 function setStatus(kind, text) { $('#statusDot').className = 'dot ' + kind; $('#statusText').textContent = text; }
-function play(code, scale = 1) {
+let loadSeq = 0, glRetries = 0, lastPlay = { code: '', scale: 1 };
+function play(code, scale = 1, retry = false) {
   if (!code) return;
+  if (!retry) glRetries = 0;
+  lastPlay = { code, scale };
   readyInfo = null; frameLoaded = false; lastErrors = []; loadT0 = performance.now();
   hideAlert(); blackTimers.forEach(clearTimeout); clearTimeout(coverTimer);
   $('#emptyState').hidden = true;
   setStatus('load', 'Loading scene…');
   layoutStage(scale);
+  // release the old scene's 3D context, show a blank page for a moment, then load the new scene
   releaseGl();
-  player.srcdoc = inject(code);
+  const seq = ++loadSeq;
+  player.dataset.blank = '1';
+  player.srcdoc = '<!doctype html><body style="margin:0;background:#000"></body>';
+  setTimeout(() => { if (seq !== loadSeq) return; delete player.dataset.blank; player.srcdoc = inject(code); }, 180);
 }
+const GL_FAIL = /getShaderPrecisionFormat|WebGL|webgl|context (?:was )?lost|Error creating WebGL/;
 function addVersion(code, note) {
   P.versions = P.versions || [];
   P.versions.push({ code, at: Date.now(), note: note || '' });
@@ -319,13 +327,19 @@ window.addEventListener('message', e => {
   } else if (d.type === 'ether-end') {
     if (!recording) setStatus('ok', 'Finished — press ⟲ to replay');
   } else if (d.type === 'ether-error') {
+    // WebKit sometimes hands a reloaded scene a dead 3D context: quietly try again before calling it an error
+    if (GL_FAIL.test(d.message) && !readyInfo && glRetries < 3 && performance.now() - loadT0 < 8000) {
+      glRetries++; setStatus('load', 'Starting 3D…');
+      setTimeout(() => play(lastPlay.code, lastPlay.scale, true), 500 * glRetries);
+      return;
+    }
     if (!lastErrors.includes(d.message)) lastErrors.push(d.message);
     setStatus('err', 'Error: ' + d.message.slice(0, 90));
     showAlert('The scene hit an error', lastErrors.slice(-3).join('\n'));
   }
 });
 player.addEventListener('load', () => {
-  if (!player.srcdoc) return;
+  if (!player.srcdoc || player.dataset.blank) return;
   frameLoaded = true;
   setTimeout(() => {
     if (!readyInfo && !lastErrors.length) { setStatus('ok', etherApi() ? 'Playing' : 'Playing (no ether API — basic controls only)'); scheduleBlackCheck(); }
@@ -579,8 +593,10 @@ $('#recordBtn').onclick = async () => {
   if (!window.MediaRecorder) return toast('This browser can\'t record video. Try Chrome or Safari.');
   const scale = Number($('#recRes').value) || 1;
   const btn = $('#recordBtn'); btn.disabled = true; btn.textContent = 'Preparing…';
-  play(code, scale);
-  await waitFor(() => readyInfo || (frameLoaded && lastErrors.length), 15000);
+  const running = readyInfo && etherApi() && !lastErrors.length && player.contentDocument && player.contentDocument.querySelector('canvas');
+  if (running) { layoutStage(scale); await new Promise(r => setTimeout(r, 450)); }
+  else play(code, scale);
+  await waitFor(() => readyInfo || (frameLoaded && lastErrors.length), 20000);
   if (!readyInfo) await waitFor(() => frameLoaded && player.contentDocument && player.contentDocument.querySelector('canvas'), 5000);
   const doc = player.contentDocument;
   const canvas = doc && [...doc.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];

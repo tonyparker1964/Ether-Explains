@@ -15,6 +15,10 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.preferences.isElementFullscreenEnabled = true
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // keep scenes, voice and recording running when the window is behind other windows
+        // (WebKit otherwise freezes timers and animation in pages it thinks you can't see)
+        WebController.turnOff(cfg.preferences, "_setHiddenPageDOMTimerThrottlingEnabled:")
+        WebController.turnOff(cfg.preferences, "_setPageVisibilityBasedProcessSuspensionEnabled:")
         let ucc = WKUserContentController()
         cfg.userContentController = ucc
         web = WKWebView(frame: .zero, configuration: cfg)
@@ -35,6 +39,7 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         web.navigationDelegate = self
         web.uiDelegate = self
         web.allowsBackForwardNavigationGestures = false
+        WebController.turnOff(web, "_setWindowOcclusionDetectionEnabled:")
         web.setValue(false, forKey: "drawsBackground")
         if #available(macOS 13.3, *) { web.isInspectable = true }
         if port == 0 {
@@ -45,6 +50,12 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     }
 
     func reload() { web.reload() }
+
+    /// Calls a WebKit setter with NO, only if this macOS version has it.
+    static func turnOff(_ obj: NSObject, _ selector: String) {
+        let sel = NSSelectorFromString(selector)
+        if obj.responds(to: sel) { _ = obj.perform(sel, with: nil) }
+    }
 
     // MARK: messages from the page
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
@@ -178,6 +189,8 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         let u = Paths.saveDir.appendingPathComponent(".selftest.js")
         guard let js = try? String(contentsOf: u, encoding: .utf8), !js.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         selfTestRan = true
+        NSApp.activate(ignoringOtherApps: true)
+        web.window?.makeKeyAndOrderFront(nil)
         web.evaluateJavaScript(js)
     }
 }

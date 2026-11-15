@@ -212,6 +212,7 @@ ${contract(P.withSound)}`;
 }
 $('#copyPrompt').onclick = async () => { await copy($('#promptOut').value); toast('Prompt copied — paste it into Claude.'); };
 async function copy(text) {
+  if (NATIVE) { try { await NATIVE.call('copy', { text }); return; } catch {} }
   try { await navigator.clipboard.writeText(text); }
   catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
 }
@@ -264,10 +265,28 @@ addEventListener('error',function(e){if(e.target&&e.target!==window&&e.target.sr
 addEventListener('unhandledrejection',function(e){send('Unhandled promise: '+((e.reason&&e.reason.message)||e.reason))});
 var ce=console.error;console.error=function(){send([].map.call(arguments,String).join(' '));return ce.apply(console,arguments)};})();
 <\/script>`;
+const NATIVE = window.EtherNative || null;
+// in the Mac app, scenes use the bundled three.js so they play without the internet
+function localize(code) {
+  const b = NATIVE && NATIVE.threeBase;
+  return b ? code.split(`https://cdn.jsdelivr.net/npm/three@${THREE_VER}/`).join(b) : code;
+}
 function inject(code) {
+  code = localize(code);
   if (/<head[^>]*>/i.test(code)) return code.replace(/<head[^>]*>/i, m => m + SHIM);
   if (/<html[^>]*>/i.test(code)) return code.replace(/<html[^>]*>/i, m => m + '<head>' + SHIM + '</head>');
   return SHIM + code;
+}
+// free the old scene's WebGL context right away (WebKit keeps a small number alive; reloading for a recording needs a fresh one)
+function releaseGl() {
+  try {
+    const doc = player.contentDocument; if (!doc) return;
+    doc.querySelectorAll('canvas').forEach(cv => {
+      const gl = cv.__etherGl || cv.getContext('webgl2') || cv.getContext('webgl');
+      const ext = gl && gl.getExtension && gl.getExtension('WEBGL_lose_context');
+      if (ext) ext.loseContext();
+    });
+  } catch {}
 }
 function setStatus(kind, text) { $('#statusDot').className = 'dot ' + kind; $('#statusText').textContent = text; }
 function play(code, scale = 1) {
@@ -277,6 +296,7 @@ function play(code, scale = 1) {
   $('#emptyState').hidden = true;
   setStatus('load', 'Loading scene…');
   layoutStage(scale);
+  releaseGl();
   player.srcdoc = inject(code);
 }
 function addVersion(code, note) {
@@ -702,6 +722,17 @@ $('#importFile').onchange = async e => {
   catch { toast('That file isn\'t an Ether Explains project.'); }
   e.target.value = '';
 };
+
+/* ---------------- Mac app extras ---------------- */
+if (NATIVE) {
+  document.body.classList.add('native');
+  $('#openSavedBtn').hidden = false;
+  $('#openSavedBtn').onclick = () => NATIVE.call('openSaveFolder');
+  $('.small-print').textContent = `Recording captures the 3D canvas plus your voice, locked together. Videos save to ${NATIVE.saveFolder}.`;
+  window.EtherNativeSaved = name => {
+    toast(`Saved ${name} to ${NATIVE.saveFolder}`, 3800);
+  };
+}
 
 /* ---------------- boot ---------------- */
 renderChips(); bindAll(); renderGallery(); updatePill(); renderCues(); layoutStage();

@@ -6,9 +6,9 @@
 <style>
 /* Layout: an edit bay. Monitor + inspector on top, timeline docked below; stacks to one column on phones. Single dark world by choice. */
 :root{
-  --bg:#0d0e12; --panel:#15171d; --raise:#1d2028; --line:rgba(226,222,240,.10); --line2:rgba(226,222,240,.18);
-  --fg:#ebe8e1; --muted:#8c909c; --accent:#f0b44c; --accent-ink:#1b1306;
-  --vid:#5b7fd1; --img:#c98a4e; --lay:#3fb8a0; --song:#7a6bd8; --danger:#e36a5c;
+  --bg:#04161f; --panel:#082433; --raise:#0c3044; --line:rgba(150,215,228,.12); --line2:rgba(150,215,228,.22);
+  --fg:#eef6f9; --muted:#9db9c5; --accent:#3fd4cc; --accent-ink:#022027;
+  --vid:#3b8fd8; --img:#9aa7ae; --lay:#2fbfa8; --song:#6aa9e8; --danger:#e36a5c;
   --sans:"Familjen Grotesk",ui-sans-serif,system-ui,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   color-scheme:dark;
@@ -87,8 +87,8 @@ details.sect>div{display:flex;flex-direction:column;gap:10px;margin-top:10px}
 .clip.dragging{opacity:.6;cursor:grabbing;z-index:5}
 .clip .thumbs{position:absolute;inset:0;background-size:auto 100%;background-repeat:repeat-x;opacity:.75}
 .clip .cap{position:relative;font:500 10px var(--mono);padding:2px 6px 5px;background:linear-gradient(transparent,rgba(0,0,0,.75));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.clip .xf{position:absolute;top:0;bottom:0;left:0;background:repeating-linear-gradient(135deg,rgba(240,180,76,.35) 0 4px,transparent 4px 8px)}
-.wave{position:absolute;top:4px;bottom:4px;left:0;border-radius:5px;background:rgba(122,107,216,.16)}
+.clip .xf{position:absolute;top:0;bottom:0;left:0;background:repeating-linear-gradient(135deg,rgba(63,212,204,.35) 0 4px,transparent 4px 8px)}
+.wave{position:absolute;top:4px;bottom:4px;left:0;border-radius:5px;background:rgba(106,169,232,.16)}
 .wave canvas{width:100%;height:100%;display:block}
 .playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:4;pointer-events:none}
 .playhead::before{content:"";position:absolute;top:0;left:-5px;border:6px solid transparent;border-top-color:var(--accent)}
@@ -100,7 +100,7 @@ details.sect>div{display:flex;flex-direction:column;gap:10px;margin-top:10px}
 .bar{height:6px;background:var(--raise);border-radius:3px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:var(--accent)}
 .dialog video{width:100%;border-radius:8px;background:#000;max-height:40vh}
-.drophint{position:fixed;inset:0;border:2px dashed var(--accent);background:rgba(13,14,18,.8);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;z-index:30;pointer-events:none}
+.drophint{position:fixed;inset:0;border:2px dashed var(--accent);background:rgba(4,22,31,.8);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;z-index:30;pointer-events:none}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--raise);border:1px solid var(--line2);padding:9px 14px;border-radius:8px;font-size:13px;z-index:40;max-width:calc(100% - 32px)}
 
 .board{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
@@ -113,7 +113,7 @@ details.sect>div{display:flex;flex-direction:column;gap:10px;margin-top:10px}
 .card .shot{aspect-ratio:16/9;max-width:100%;background:var(--bg) center/cover no-repeat;position:relative;display:flex;align-items:center;justify-content:center}
 .card .shot.empty{background:repeating-linear-gradient(135deg,var(--bg) 0 10px,var(--panel) 10px 20px)}
 .card .shot .add{font:500 12px var(--mono);color:var(--muted);text-align:center;padding:8px}
-.card .num{position:absolute;top:6px;left:6px;font:600 12px var(--mono);background:rgba(13,14,18,.82);padding:2px 7px;border-radius:5px}
+.card .num{position:absolute;top:6px;left:6px;font:600 12px var(--mono);background:rgba(4,22,31,.82);padding:2px 7px;border-radius:5px}
 .card .badge{position:absolute;top:6px;right:6px;font:500 10px var(--mono);letter-spacing:.08em;padding:2px 6px;border-radius:4px;color:var(--bg)}
 .card .meta{padding:9px 10px 10px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .card .t{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -351,7 +351,7 @@ function exampleCard(title,sub,h1,h2){
   const rg=x.createRadialGradient(800,700,0,800,700,700);rg.addColorStop(0,`hsla(${h1+20},90%,65%,.55)`);rg.addColorStop(1,'transparent');x.fillStyle=rg;x.fillRect(0,0,1600,1600);
   x.fillStyle='rgba(255,255,255,.92)';x.textAlign='center';x.font='600 110px "Familjen Grotesk",system-ui,sans-serif';x.fillText(title,800,820);
   x.font='500 46px "JetBrains Mono",monospace';x.fillStyle='rgba(255,255,255,.6)';x.fillText(sub,800,910);
-  x.font='500 34px "JetBrains Mono",monospace';x.fillStyle='rgba(240,180,76,.9)';x.fillText('EXAMPLE CARD',800,1180);
+  x.font='500 34px "JetBrains Mono",monospace';x.fillStyle='rgba(63,212,204,.9)';x.fillText('EXAMPLE CARD',800,1180);
   return c.toDataURL('image/jpeg',.85);
 }
 function addExamples(){
@@ -548,7 +548,7 @@ function drawPanel(x,c){
   x.save();
   const gr=x.createLinearGradient(0,0,W,H);gr.addColorStop(0,`hsl(${hue},35%,16%)`);gr.addColorStop(1,`hsl(${(hue+40)%360},40%,7%)`);x.fillStyle=gr;x.fillRect(0,0,W,H);
   const m=Math.min(W,H);x.textAlign='center';
-  x.fillStyle='rgba(240,180,76,.95)';x.font=`500 ${m*.035|0}px "JetBrains Mono",monospace`;x.fillText(`SCENE ${i+1}`,W/2,H*.40);
+  x.fillStyle='rgba(63,212,204,.95)';x.font=`500 ${m*.035|0}px "JetBrains Mono",monospace`;x.fillText(`SCENE ${i+1}`,W/2,H*.40);
   x.fillStyle='#fff';x.font=`700 ${m*.075|0}px "Familjen Grotesk",system-ui,sans-serif`;
   wrap(x,c.title||'Untitled scene',W*.8).slice(0,2).forEach((l,k)=>x.fillText(l,W/2,H*.40+m*.11+k*m*.085));
   if(c.notes){x.fillStyle='rgba(255,255,255,.62)';x.font=`400 ${m*.033|0}px "Familjen Grotesk",system-ui,sans-serif`;
@@ -594,7 +594,7 @@ function drawText(x,c,lt,alpha,tr){
   let a=alpha*outF, dy=0, scl=1;
   if(an==='fadeUp'){const e=ease(inT);a*=e;dy=(1-e)*fs*.7;}
   if(an==='pop'){const u=Math.min(1,lt/.45);scl=.5+.5*backOut(u);a*=Math.min(1,u*2);}
-  if(an==='glow'){x.shadowColor='rgba(240,180,76,.95)';x.shadowBlur=fs*(.5+.6*Math.abs(Math.sin(lt*2.2))+1.2*beatPulse(c._start+lt));a*=ease(inT);}
+  if(an==='glow'){x.shadowColor='rgba(63,212,204,.95)';x.shadowBlur=fs*(.5+.6*Math.abs(Math.sin(lt*2.2))+1.2*beatPulse(c._start+lt));a*=ease(inT);}
   else {x.shadowColor='rgba(0,0,0,.7)';x.shadowBlur=fs*.5;}
   const nW=lines.reduce((s,l)=>s+l.split(' ').length,0), span=Math.max(.4,Math.min(c.dur*.6,nW*.35));
   const totalCh=lines.join(' ').length, typed=an==='type'?Math.floor(totalCh*Math.min(1,lt/Math.max(.4,c.dur*.55))):Infinity;
@@ -606,7 +606,7 @@ function drawText(x,c,lt,alpha,tr){
       const seg=w+(k<ws.length-1||li<lines.length-1?' ':''),segW=x.measureText(seg).width;
       let wa=a,col='#fff',txt=w;
       if(an==='words'){const st=wi/nW*span;wa*=clamp((lt-st)/.25);}
-      if(an==='karaoke'){const st=wi/nW*(c.dur*.9);col=lt>=st?'#f0b44c':'rgba(255,255,255,.55)';wa=alpha*outF*Math.min(1,lt/.3);}
+      if(an==='karaoke'){const st=wi/nW*(c.dur*.9);col=lt>=st?'#3fd4cc':'rgba(255,255,255,.55)';wa=alpha*outF*Math.min(1,lt/.3);}
       if(an==='type'){const left=typed-chars;txt=left<=0?'':w.slice(0,left);}
       if(txt&&wa>0){x.globalAlpha=clamp(wa);x.fillStyle=col;x.fillText(txt,px,py);}
       px+=segW;chars+=seg.length;wi++;
@@ -748,11 +748,11 @@ function renderTimeline(){
     const w=document.createElement('div');w.className='wave';w.style.width=P.song.dur*pps+'px';
     const c2=document.createElement('canvas');w.appendChild(c2);atrack.appendChild(w);
     const W2=Math.min(8000,Math.round(P.song.dur*pps)),H2=68;c2.width=W2;c2.height=H2;const x=c2.getContext('2d');
-    x.fillStyle='rgba(160,148,240,.75)';
+    x.fillStyle='rgba(155,232,240,.75)';
     if(P.song.peaks){const pk=P.song.peaks;for(let i=0;i<W2;i++){const v=pk[Math.floor(i/W2*pk.length)]||0;const hh=Math.max(1,v*H2*.95);x.fillRect(i,(H2-hh)/2,1,hh);}}
     else {x.fillRect(0,H2/2-1,W2,2);}
-    if(P.song.beats){x.fillStyle='rgba(240,180,76,.85)';for(const b of P.song.beats)x.fillRect(Math.round(b/P.song.dur*W2),0,1,9);}
-    if(total<P.song.dur){x.fillStyle='rgba(13,14,18,.6)';x.fillRect(total/P.song.dur*W2,0,W2,H2);}
+    if(P.song.beats){x.fillStyle='rgba(63,212,204,.85)';for(const b of P.song.beats)x.fillRect(Math.round(b/P.song.dur*W2),0,1,9);}
+    if(total<P.song.dur){x.fillStyle='rgba(4,22,31,.6)';x.fillRect(total/P.song.dur*W2,0,W2,H2);}
   } else {const e=document.createElement('div');e.className='empty';e.style.padding='12px';e.textContent='No song. Add one with ♪ Song.';atrack.appendChild(e);}
   updatePlayhead();
   renderBoard();

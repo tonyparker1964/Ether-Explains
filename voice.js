@@ -130,13 +130,13 @@ function drawWave() {
   const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
   const X = t => t / d * w;
   (P().voiceCues || []).forEach((c, i) => {
-    x.fillStyle = i % 2 ? 'rgba(139,108,255,.16)' : 'rgba(232,195,122,.14)';
+    x.fillStyle = i % 2 ? 'rgba(59,143,216,.22)' : 'rgba(63,212,204,.16)';
     x.fillRect(X(c.start), 0, X(c.end) - X(c.start), h);
-    x.fillStyle = 'rgba(236,232,255,.75)'; x.font = '10px Inter,system-ui'; x.fillText(String(i + 1), X(c.start) + 3, 11);
+    x.fillStyle = 'rgba(238,246,249,.8)'; x.font = '10px Inter,system-ui'; x.fillText(String(i + 1), X(c.start) + 3, 11);
   });
   const pk = v.an && v.an.peaks;
   if (pk) {
-    x.fillStyle = 'rgba(236,232,255,.7)';
+    x.fillStyle = 'rgba(238,246,249,.78)';
     const mid = h / 2 + 4, amp = h / 2 - 10, n = pk.length;
     let m = 0; for (let i = 0; i < n; i++) if (pk[i] > m) m = pk[i];
     const k = m > 0 ? 1 / m : 1;
@@ -148,11 +148,11 @@ function drawWave() {
   }
   (P().voiceCues || []).forEach((c, i) => ['start', 'end'].forEach(edge => {
     const on = hover && hover.i === i && hover.edge === edge;
-    x.fillStyle = on ? '#e8c37a' : (edge === 'start' ? 'rgba(95,227,255,.85)' : 'rgba(255,255,255,.35)');
+    x.fillStyle = on ? '#3fd4cc' : (edge === 'start' ? 'rgba(155,232,240,.9)' : 'rgba(255,255,255,.35)');
     x.fillRect(X(c[edge]) - (on ? 1.5 : 0.5), 0, on ? 3 : 1, h);
   }));
   if (!audio.paused || listening) {
-    x.fillStyle = '#ff4d6d'; x.fillRect(X(audio.currentTime) - 1, 0, 2, h);
+    x.fillStyle = '#ff6b6b'; x.fillRect(X(audio.currentTime) - 1, 0, 2, h);
   }
   const ci = (P().voiceCues || []).findIndex(c => audio.currentTime >= c.start && audio.currentTime < c.end);
   $$('#vCues li').forEach((li, i) => li.classList.toggle('on', !audio.paused && i === ci));
@@ -292,7 +292,19 @@ async function finishTake() {
 /* ---------------- Mac voices (speech synthesis) ---------------- */
 const synth = window.speechSynthesis;
 let macVoices = [];
+const NATIVE = window.EtherNative || null;
+async function loadNativeVoices() {
+  let list = [];
+  try { list = await NATIVE.call('voices'); } catch (e) { EE.toast('Couldn\'t list the Mac voices.'); }
+  const lang = (navigator.language || 'en').slice(0, 2);
+  const score = v => (v.lang.startsWith(lang) ? 100 : 0) + (v.quality === 'Premium' ? 30 : v.quality === 'Enhanced' ? 20 : 0);
+  macVoices = list.sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
+  $('#macVoice').innerHTML = macVoices.map((v, i) => `<option value="${i}">${EE.esc(v.name)} · ${EE.esc(v.lang)}${v.quality ? ' · ' + v.quality : ''}</option>`).join('');
+  const keep = macVoices.findIndex(v => v.id === P().macVoiceId || v.name === P().macVoice);
+  $('#macVoice').value = String(keep >= 0 ? keep : 0);
+}
 function loadMacVoices() {
+  if (NATIVE) { if (!macVoices.length) loadNativeVoices(); return; }
   if (!synth) { $('#macVoice').innerHTML = '<option>Speech isn\'t available in this browser</option>'; return; }
   const all = synth.getVoices();
   if (!all.length) return;
@@ -306,7 +318,7 @@ function loadMacVoices() {
 }
 if (synth) synth.onvoiceschanged = () => { if (P().voiceMode === 'mac') loadMacVoices(); };
 const macVoice = () => macVoices[+$('#macVoice').value];
-$('#macVoice').onchange = () => { P().macVoice = macVoice()?.name || ''; EE.save(); };
+$('#macVoice').onchange = () => { P().macVoice = macVoice()?.name || ''; P().macVoiceId = macVoice()?.id || ''; EE.save(); };
 function showRate() { const r = P().macRate || 1; $('#macRate').value = r; $('#macRateV').textContent = r.toFixed(2).replace(/0$/, '') + '×'; }
 $('#macRate').oninput = () => { P().macRate = +$('#macRate').value; showRate(); EE.save(); };
 function utter(text) {
@@ -322,7 +334,30 @@ const speak = text => new Promise(res => {
   speak.keep = u; // keep a reference so the end event always fires
   synth.speak(u);
 });
-$('#macTest').onclick = () => { if (!synth) return; synth.cancel(); speak(getLines()[0] || 'Hello. This is the voice of Ether Explains.'); };
+$('#macTest').onclick = () => {
+  if (NATIVE) return NATIVE.call('speak', { text: getLines()[0] || 'Hello. This is the voice of Ether Explains.', voiceId: macVoice()?.id, rate: P().macRate || 1 });
+  if (!synth) return; synth.cancel(); speak(getLines()[0] || 'Hello. This is the voice of Ether Explains.'); };
+
+/* Mac app: render the lines with a Mac voice into a real, lined-up voice track */
+if (NATIVE) {
+  $('#macMake').hidden = false; $('#macNativeHint').hidden = false;
+  ['#macTime', '#macAlong', '#macWebOnly'].forEach(x => $(x).hidden = true);
+}
+$('#macMake').onclick = async () => {
+  const lines = getLines(); if (!lines.length) return EE.toast('Add the lines first (or Pull from Story).');
+  const v = macVoice(), btn = $('#macMake'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = `Making ${lines.length} line${lines.length > 1 ? 's' : ''}…`;
+  try {
+    const r = await NATIVE.call('synth', { lines, voiceId: v?.id, rate: P().macRate || 1, gap: 0.45 });
+    const blob = await (await fetch(r.url)).blob();
+    P().voiceCues = null;
+    await EE.setVoice(blob, `${(v?.name || 'Mac voice')} — ${EE.slug()}.wav`, { quiet: true });
+    P().voiceCues = r.cues.map(c => ({ start: +c.start, end: +c.end, text: String(c.text) }));
+    writeSrt(true);
+    EE.toast(`Voice track ready: ${v?.name || 'Mac voice'}, ${r.cues.length} lines, ${(+r.duration).toFixed(1)}s — lined up.`, 3800);
+  } catch (e) { EE.toast('Couldn\'t make the voice track: ' + (e && e.message || e)); }
+  btn.disabled = false; btn.textContent = label;
+};
 
 let timing = false;
 $('#macTime').onclick = async () => {

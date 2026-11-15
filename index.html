@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ether Explains</title>
 <meta name="description" content="Ether Explains — build 3D animated explainers with Claude and three.js, then play and record them.">
-<meta name="theme-color" content="#07060f">
+<meta name="theme-color" content="#04161f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -177,12 +177,16 @@
         </div>
         <div class="row gap">
           <button class="btn" id="macTest" type="button">▶ Hear it</button>
+          <button class="btn primary" id="macMake" type="button" hidden>🎙 Make the voice track</button>
           <button class="btn primary" id="macTime" type="button">Time my lines with this voice</button>
           <button class="btn" id="macAlong" type="button">▶ Read along with the scene</button>
         </div>
-        <p class="hint">Read-along speaks each line on its cue and holds the picture if a line runs long, so they never drift. Browsers can't record Mac voices directly, so to put one in the video, make a voice file on your Mac:</p>
-        <div class="row gap"><button class="btn ghost" id="macCmd" type="button">Copy Terminal command</button></div>
-        <p class="hint small">Paste it in Terminal and press Return. It saves a WAV to your Desktop. Then load it in 📂 Voice file and press Line it up.</p>
+        <p class="hint" id="macNativeHint" hidden>Makes a real voice track from your lines with this Mac voice, already lined up line by line. It plays with the scene and goes into the recorded video. Get more voices (Premium and Enhanced sound best) in System Settings › Accessibility › Spoken Content › System Voice › Manage Voices.</p>
+        <div id="macWebOnly">
+          <p class="hint">Read-along speaks each line on its cue and holds the picture if a line runs long, so they never drift. Browsers can't record Mac voices directly, so to put one in the video, make a voice file on your Mac:</p>
+          <div class="row gap"><button class="btn ghost" id="macCmd" type="button">Copy Terminal command</button></div>
+          <p class="hint small">Paste it in Terminal and press Return. It saves a WAV to your Desktop. Then load it in 📂 Voice file and press Line it up.</p>
+        </div>
       </div>
 
       <div id="vTimeline" hidden>
@@ -281,6 +285,7 @@
       <button class="btn cut" id="cutBtn" disabled title="Open your last recording in the Ether's Cut editor">✂ Edit in Ether's Cut</button>
       <button class="btn ghost" id="coverBtn" title="Use the frame on screen as this style's picture in the gallery">🖼 Set as cover</button>
       <button class="btn ghost" id="downloadHtml">Download HTML</button>
+      <button class="btn ghost" id="openSavedBtn" hidden title="Open Movies › Ether Explains in Finder">📁 Saved</button>
       <button class="btn ghost" id="pasteCodeBtn3">Replace code</button>
     </div>
     <p class="hint small-print">Recording captures the 3D canvas plus your voice, locked together in real time. Keep this tab in front while it records.</p>

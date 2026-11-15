@@ -103,16 +103,19 @@ final class ClaudeCode {
         stop()
         guard let claude = findClaude() else { return done(nil, "Claude Code isn't installed on this Mac. Press Set up Claude Code.", [:]) }
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: claude)
+        // start it through your login shell, exactly like Terminal does
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         var args = ["-p", "--output-format", "stream-json", "--verbose"]
         if partial { args.append("--include-partial-messages") }
-        args += ["--append-system-prompt", system, "--max-turns", "3",
-                 "--disallowedTools", "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task,TodoWrite,Read,Glob,Grep,LS,ExitPlanMode,Skill,SlashCommand,BashOutput,KillShell"]
+        // write the scene straight away: no tools, no long thinking (thinking made Claude Code take 10+ minutes)
+        args += ["--append-system-prompt", system, "--max-turns", "2", "--tools", "",
+                 "--disallowedTools", "ToolSearch,AskUserQuestion,EnterPlanMode,EnterWorktree,TaskOutput,Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task,TodoWrite,Read,Glob,Grep,LS,ExitPlanMode,Skill,SlashCommand,BashOutput,KillShell",
+                 "--settings", "{\"alwaysThinkingEnabled\":false}"]
         args.append("--strict-mcp-config") // no connectors needed to write a scene
         if !model.isEmpty { args += ["--model", model] }
-        p.arguments = args
+        p.arguments = ["-lc", "exec \"$0\" \"$@\"", claude] + args
         var env = ProcessInfo.processInfo.environment; env["PATH"] = loginPath()
-        if env["MAX_THINKING_TOKENS"] == nil { env["MAX_THINKING_TOKENS"] = "6000" } // plan briefly, then write
+        env["MAX_THINKING_TOKENS"] = "0"
         p.environment = env
         let work = supportDir.appendingPathComponent("claude-work", isDirectory: true)
         try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -122,16 +125,9 @@ final class ClaudeCode {
 
         var buffer = Data(), text = "", fullText = "", resultText: String?, resultError: String?, meta: [String: Any] = [:]
         var errText = "", lastTick = Date.distantPast, planned = 0, toolNote = ""
-        // a short record of the last run, for troubleshooting
-        let logURL = Paths.saveDir.appendingPathComponent(".claude-last-run.log")
-        try? "".write(to: logURL, atomically: true, encoding: .utf8)
-        let logH = try? FileHandle(forWritingTo: logURL)
-        var logged = 0
         let lock = NSLock()
         func handle(line: String) {
             guard let d = line.data(using: .utf8), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return }
-            let isDelta = (j["event"] as? [String: Any])?["type"] as? String == "content_block_delta"
-            if !isDelta || logged < 400 { logged += 1; logH?.write(Data((String(line.prefix(isDelta ? 160 : 700)) + "\n").utf8)) }
             switch j["type"] as? String {
             case "stream_event":
                 if let ev = j["event"] as? [String: Any] {
@@ -177,13 +173,12 @@ final class ClaudeCode {
         }
         errPipe.fileHandleForReading.readabilityHandler = { h in
             let chunk = h.availableData
-            if let s = String(data: chunk, encoding: .utf8) { lock.lock(); errText += s; if errText.count > 4000 { errText = String(errText.suffix(4000)) }; lock.unlock() }
+            if let s = String(data: chunk, encoding: .utf8), !s.isEmpty { lock.lock(); errText += s; if errText.count > 4000 { errText = String(errText.suffix(4000)) }; lock.unlock() }
         }
         p.terminationHandler = { [weak self] proc in
             outPipe.fileHandleForReading.readabilityHandler = nil
             errPipe.fileHandleForReading.readabilityHandler = nil
             lock.lock()
-            try? logH?.close()
             let rest = outPipe.fileHandleForReading.readDataToEndOfFile()
             buffer.append(rest)
             if let s = String(data: buffer, encoding: .utf8) { s.split(separator: "\n").forEach { handle(line: String($0)) } }

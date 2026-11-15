@@ -45,6 +45,7 @@ codesign --force --deep -s - "build/$APP" && echo "Signed (local)"
 
 mkdir -p "$HOME/Applications"
 pkill -x EtherExplains >/dev/null 2>&1 && sleep 1
+pkill -f "append-system-prompt You are an expert three.js developer" >/dev/null 2>&1
 rm -rf "$HOME/Applications/$APP" && cp -R "build/$APP" "$HOME/Applications/"
 rm -rf build/EtherExplains
 echo "Installed: ~/Applications/$APP"

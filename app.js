@@ -856,7 +856,9 @@ async function aiGenerate(prompt, note) {
   const status = (txt, tail) => { $('#aiStatus').textContent = txt; if (tail != null) $('#aiTail').textContent = tail; };
   status(useClaude ? `Asking ${who}… (a full scene usually takes a few minutes)` : `Asking ${who}… (loading a big model can take a minute or two)`, '');
   const timer = setInterval(() => { if (!aiBusy) return; const s = Math.round((performance.now() - t0) / 1000); if ($('#aiStatus').dataset.chars) status(`Writing the scene… ${$('#aiStatus').dataset.chars} characters · ${s}s`); else status(`${useClaude ? 'Claude is planning the scene' : 'Waiting for ' + who}… ${s}s`); }, 1000);
-  window.EtherLLMProgress = p => { $('#aiStatus').dataset.chars = p.chars; status(`Writing the scene… ${p.chars} characters · ${Math.round((performance.now() - t0) / 1000)}s`, p.tail); };
+  window.EtherLLMProgress = p => {
+    if (!p.chars) { if (p.tail) status(`${p.tail.replace(/\(\d+ characters of notes\)/, '').trim()} ${Math.round((performance.now() - t0) / 1000)}s`, ''); return; }
+    $('#aiStatus').dataset.chars = p.chars; status(`Writing the scene… ${p.chars} characters · ${Math.round((performance.now() - t0) / 1000)}s`, p.tail); };
   let text = null, err = '';
   try {
     if (useClaude) { const r = await NATIVE.call('claudeRun', { prompt, system: AI_SYSTEM, model: P.ccModel || '' }); text = r.text; }

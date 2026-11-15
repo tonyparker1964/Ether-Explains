@@ -91,6 +91,12 @@ final class ClaudeCode {
 
     func stop() { process?.terminate(); process = nil }
 
+    /// Stops scene runs left over from an earlier session of this app (they'd keep using Claude usage).
+    static let runMarker = "You are an expert three.js developer and motion designer"
+    static func stopLeftovers() {
+        DispatchQueue.global(qos: .utility).async { shell("/usr/bin/pkill", ["-f", "append-system-prompt \(runMarker)"], timeout: 5) }
+    }
+
     /// Asks Claude Code for a reply and streams it. `progress` gets (characters so far, last bit of text).
     func run(prompt: String, system: String, model: String, partial: Bool = true,
              progress: @escaping (Int, String) -> Void, done: @escaping (String?, String?, [String: Any]) -> Void) {
@@ -101,10 +107,12 @@ final class ClaudeCode {
         var args = ["-p", "--output-format", "stream-json", "--verbose"]
         if partial { args.append("--include-partial-messages") }
         args += ["--append-system-prompt", system, "--max-turns", "3",
-                 "--disallowedTools", "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task"]
+                 "--disallowedTools", "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task,TodoWrite,Read,Glob,Grep,LS,ExitPlanMode,Skill,SlashCommand,BashOutput,KillShell"]
+        args.append("--strict-mcp-config") // no connectors needed to write a scene
         if !model.isEmpty { args += ["--model", model] }
         p.arguments = args
         var env = ProcessInfo.processInfo.environment; env["PATH"] = loginPath()
+        if env["MAX_THINKING_TOKENS"] == nil { env["MAX_THINKING_TOKENS"] = "6000" } // plan briefly, then write
         p.environment = env
         let work = supportDir.appendingPathComponent("claude-work", isDirectory: true)
         try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -113,14 +121,32 @@ final class ClaudeCode {
         p.standardInput = inPipe; p.standardOutput = outPipe; p.standardError = errPipe
 
         var buffer = Data(), text = "", fullText = "", resultText: String?, resultError: String?, meta: [String: Any] = [:]
-        var errText = "", lastTick = Date.distantPast
+        var errText = "", lastTick = Date.distantPast, planned = 0, toolNote = ""
+        // a short record of the last run, for troubleshooting
+        let logURL = Paths.saveDir.appendingPathComponent(".claude-last-run.log")
+        try? "".write(to: logURL, atomically: true, encoding: .utf8)
+        let logH = try? FileHandle(forWritingTo: logURL)
+        var logged = 0
         let lock = NSLock()
         func handle(line: String) {
             guard let d = line.data(using: .utf8), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return }
+            let isDelta = (j["event"] as? [String: Any])?["type"] as? String == "content_block_delta"
+            if !isDelta || logged < 400 { logged += 1; logH?.write(Data((String(line.prefix(isDelta ? 160 : 700)) + "\n").utf8)) }
             switch j["type"] as? String {
             case "stream_event":
-                if let ev = j["event"] as? [String: Any], let delta = ev["delta"] as? [String: Any],
-                   delta["type"] as? String == "text_delta", let t = delta["text"] as? String { text += t }
+                if let ev = j["event"] as? [String: Any] {
+                    if let delta = ev["delta"] as? [String: Any] {
+                        switch delta["type"] as? String {
+                        case "text_delta": text += delta["text"] as? String ?? ""
+                        case "thinking_delta": planned += (delta["thinking"] as? String ?? "").count
+                        case "input_json_delta": planned += (delta["partial_json"] as? String ?? "").count
+                        default: break
+                        }
+                    }
+                    if ev["type"] as? String == "content_block_start", let cb = ev["content_block"] as? [String: Any], cb["type"] as? String == "tool_use" {
+                        toolNote = "Claude is using \(cb["name"] as? String ?? "a tool")"
+                    }
+                }
             case "assistant":
                 if let msg = j["message"] as? [String: Any], let content = msg["content"] as? [[String: Any]] {
                     for c in content where c["type"] as? String == "text" { fullText += (c["text"] as? String ?? "") }
@@ -134,7 +160,7 @@ final class ClaudeCode {
             let shown = text.isEmpty ? fullText : text
             if Date().timeIntervalSince(lastTick) > 0.4 {
                 lastTick = Date()
-                let n = shown.count, tail = String(shown.suffix(160))
+                let n = shown.count, tail = shown.isEmpty ? (toolNote.isEmpty ? (planned > 0 ? "Claude is planning the scene…" : "") : toolNote) : String(shown.suffix(160))
                 DispatchQueue.main.async { progress(n, tail) }
             }
         }
@@ -157,6 +183,7 @@ final class ClaudeCode {
             outPipe.fileHandleForReading.readabilityHandler = nil
             errPipe.fileHandleForReading.readabilityHandler = nil
             lock.lock()
+            try? logH?.close()
             let rest = outPipe.fileHandleForReading.readDataToEndOfFile()
             buffer.append(rest)
             if let s = String(data: buffer, encoding: .utf8) { s.split(separator: "\n").forEach { handle(line: String($0)) } }

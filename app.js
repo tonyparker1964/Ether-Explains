@@ -768,10 +768,10 @@ const engine = () => P.aiEngine || 'claude';
 function setEngine(e) {
   P.aiEngine = e;
   $$('#aiEngine button').forEach(b => b.classList.toggle('active', b.dataset.eng === e));
-  $('#eng-claude').hidden = e !== 'claude'; $('#eng-local').hidden = e !== 'local';
-  const who = e === 'claude' ? 'Claude' : 'local AI';
+  $('#eng-claude').hidden = e !== 'claude'; $('#eng-chatgpt').hidden = e !== 'chatgpt'; $('#eng-local').hidden = e !== 'local';
+  const who = e === 'claude' ? 'Claude' : e === 'chatgpt' ? 'ChatGPT' : 'local AI';
   $('#aiMake').textContent = `✦ Make the scene with ${who}`; $('#aiFix').textContent = `✦ Fix it with ${who}`;
-  if (e === 'claude' && !cc) ccCheck(); if (e === 'local' && !$('#aiModel').value) aiFindModels();
+  if (e === 'claude' && !cc) ccCheck(); if (e === 'chatgpt' && !gpt) gptCheck(); if (e === 'local' && !$('#aiModel').value) aiFindModels();
 }
 $$('#aiEngine button').forEach(b => b.onclick = () => { setEngine(b.dataset.eng); save(); });
 async function ccCheck() {
@@ -801,8 +801,36 @@ $('#ccConnect').onclick = async () => {
   catch (e) { toast(String(e && e.message || e), 5000); }
 };
 $('#ccModel').onchange = () => { P.ccModel = $('#ccModel').value; save(); };
+let gpt = null; // Codex status
+async function gptCheck() {
+  if (!NATIVE) { $('#gptTitle').textContent = 'ChatGPT works in the Mac app'; $('#gptMeta').textContent = ''; $('#gptConnect').hidden = true; return null; }
+  $('#gptTitle').textContent = 'Checking Codex…'; $('#gptMeta').textContent = ''; $('#gptDot').className = 'dot load';
+  try { gpt = await NATIVE.call('codexStatus'); } catch (e) { gpt = { installed: false }; }
+  const card = $('#gptCard');
+  if (!gpt.installed) {
+    $('#gptDot').className = 'dot err'; card.classList.remove('ok');
+    $('#gptTitle').textContent = 'Codex isn\'t on this Mac yet'; $('#gptMeta').textContent = 'Set it up once: it installs and signs in, in Terminal.';
+    $('#gptConnect').textContent = 'Set up ChatGPT';
+  } else if (!gpt.signedIn) {
+    $('#gptDot').className = 'dot err'; card.classList.remove('ok');
+    $('#gptTitle').textContent = 'Codex needs you to sign in'; $('#gptMeta').textContent = (gpt.version || '') + ' · press Sign in to ChatGPT';
+    $('#gptConnect').textContent = 'Sign in to ChatGPT';
+  } else {
+    $('#gptDot').className = 'dot ok'; card.classList.add('ok');
+    $('#gptTitle').textContent = 'ChatGPT is connected';
+    $('#gptMeta').textContent = [gpt.statusText && gpt.statusText.split('\n')[0], gpt.version].filter(Boolean).join(' · ');
+    $('#gptConnect').textContent = 'Switch account';
+  }
+  return gpt;
+}
+$('#gptCheck').onclick = () => gptCheck();
+$('#gptConnect').onclick = async () => {
+  try { await NATIVE.call('codexConnect', { install: !!(gpt && !gpt.installed) }); toast('Terminal opened. Sign in there, then come back and press ↻.', 6000); }
+  catch (e) { toast(String(e && e.message || e), 5000); }
+};
+$('#gptModel').onchange = () => { P.gptModel = $('#gptModel').value.trim(); save(); };
 function bindAi() {
-  $('#ccModel').value = P.ccModel || '';
+  $('#ccModel').value = P.ccModel || ''; $('#gptModel').value = P.gptModel || '';
   setEngine(engine());
   $('#aiServer').value = P.aiServer || 'http://127.0.0.1:11434';
   $('#aiURL').hidden = $('#aiServer').value !== 'custom'; $('#aiURL').value = P.aiURL || '';
@@ -842,30 +870,37 @@ async function aiFindModels(loud) {
 }
 async function aiGenerate(prompt, note) {
   if (aiBusy) return;
-  const useClaude = engine() === 'claude';
-  if (useClaude) {
+  const useClaude = engine() === 'claude', useGpt = engine() === 'chatgpt';
+  if (useGpt) {
+    if (!NATIVE) return toast('Making scenes with ChatGPT works in the Ether Explains Mac app.');
+    if (!gpt || !gpt.installed || !gpt.signedIn) await gptCheck();
+    if (!gpt.installed || !gpt.signedIn) return toast(gpt.installed ? 'Sign in to ChatGPT first (button above).' : 'Set up ChatGPT first (button above).', 5000);
+  } else if (useClaude) {
     if (!NATIVE) return toast('Making scenes with Claude works in the Ether Explains Mac app.');
     if (!cc || !cc.installed || !cc.signedIn) await ccCheck();
     if (!cc.installed || !cc.signedIn) return toast(cc.installed ? 'Sign in to Claude first (button above).' : 'Set up Claude Code first (button above).', 5000);
   } else if (!P.aiModel) { await aiFindModels(true); if (!P.aiModel) return; }
-  const who = useClaude ? ('Claude' + (P.ccModel ? ' ' + P.ccModel[0].toUpperCase() + P.ccModel.slice(1) : '')) : P.aiModel;
+  const who = useClaude ? ('Claude' + (P.ccModel ? ' ' + P.ccModel[0].toUpperCase() + P.ccModel.slice(1) : '')) : useGpt ? ('ChatGPT' + (P.gptModel ? ' ' + P.gptModel : '')) : P.aiModel;
+  const cloud = useClaude || useGpt;
   if (!NATIVE && location.protocol === 'https:' && !/^https:/.test(aiBase())) toast('Tip: the Mac app talks to your local AI without any setup.', 3500);
   aiBusy = true;
   const t0 = performance.now(), btns = ['#aiMake', '#aiFix'];
   btns.forEach(s => $(s).disabled = true); $('#aiStop').hidden = false; $('#aiProgress').hidden = false;
   const status = (txt, tail) => { $('#aiStatus').textContent = txt; if (tail != null) $('#aiTail').textContent = tail; };
-  status(useClaude ? `Asking ${who}… (a full scene takes about 2–3 minutes)` : `Asking ${who}… (loading a big model can take a minute or two)`, '');
-  const timer = setInterval(() => { if (!aiBusy) return; const s = Math.round((performance.now() - t0) / 1000); if ($('#aiStatus').dataset.chars) status(`Writing the scene… ${$('#aiStatus').dataset.chars} characters · ${s}s`); else status(`${useClaude ? 'Claude is planning the scene' : 'Waiting for ' + who}… ${s}s`); }, 1000);
+  status(cloud ? `Asking ${who}… (a full scene takes a few minutes)` : `Asking ${who}… (loading a big model can take a minute or two)`, '');
+  const timer = setInterval(() => { if (!aiBusy) return; const s = Math.round((performance.now() - t0) / 1000); if ($('#aiStatus').dataset.chars) status(`Writing the scene… ${$('#aiStatus').dataset.chars} characters · ${s}s`); else status(`${useClaude ? 'Claude is planning the scene' : useGpt ? ($('#aiStatus').dataset.stage || 'ChatGPT is planning the scene…').replace(/…$/, '') : 'Waiting for ' + who}… ${s}s`); }, 1000);
   window.EtherLLMProgress = p => {
+    if (!p.chars && useGpt) { $('#aiStatus').dataset.stage = p.tail; return; }
     if (!p.chars) { if (p.tail) status(`${p.tail.replace(/\(\d+ characters of notes\)/, '').trim()} ${Math.round((performance.now() - t0) / 1000)}s`, ''); return; }
     $('#aiStatus').dataset.chars = p.chars; status(`Writing the scene… ${p.chars} characters · ${Math.round((performance.now() - t0) / 1000)}s`, p.tail); };
   let text = null, err = '';
   try {
     if (useClaude) { const r = await NATIVE.call('claudeRun', { prompt, system: AI_SYSTEM, model: P.ccModel || '' }); text = r.text; }
+    else if (useGpt) { const r = await NATIVE.call('codexRun', { prompt, system: AI_SYSTEM, model: P.gptModel || '' }); text = r.text; }
     else if (NATIVE) text = await NATIVE.call('llm', { base: aiBase(), kind: aiKind, model: P.aiModel, system: AI_SYSTEM, prompt });
     else text = await aiDirect(prompt);
   } catch (e) { err = (e && e.message) || String(e); }
-  clearInterval(timer); delete $('#aiStatus').dataset.chars;
+  clearInterval(timer); delete $('#aiStatus').dataset.chars; delete $('#aiStatus').dataset.stage;
   aiBusy = false; btns.forEach(s => $(s).disabled = false); $('#aiStop').hidden = true;
   const secs = Math.round((performance.now() - t0) / 1000);
   if (err || !text) { status(err || 'The model returned nothing.', ''); toast(err || 'The model returned nothing.', 5000); return; }
@@ -895,10 +930,10 @@ async function aiDirect(prompt) { // web page only (the Mac app goes through nat
   }
   return out;
 }
-$('#aiMake').onclick = () => aiGenerate(buildPrompt(), engine() === 'claude' ? 'made in app' : 'local AI');
+$('#aiMake').onclick = () => aiGenerate(buildPrompt(), engine() === 'local' ? 'local AI' : 'made in app');
 $('#aiFix').onclick = () => { const was = $('#includeCode').checked; $('#includeCode').checked = true; const pr = buildRevise(); $('#includeCode').checked = was; buildRevise();
   if (!currentCode()) return toast('Load a scene first.'); showTab('prompt'); aiGenerate(pr, 'fix'); };
-$('#aiStop').onclick = () => { if (NATIVE) { NATIVE.call(engine() === 'claude' ? 'claudeStop' : 'llmStop'); } else if (aiAbort) aiAbort.abort(); };
+$('#aiStop').onclick = () => { if (NATIVE) { NATIVE.call(engine() === 'claude' ? 'claudeStop' : engine() === 'chatgpt' ? 'codexStop' : 'llmStop'); } else if (aiAbort) aiAbort.abort(); };
 
 /* ---------------- Mac app extras ---------------- */
 if (NATIVE) {

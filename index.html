@@ -221,6 +221,7 @@
         <div class="subhead">Make it right here</div>
         <div class="seg" id="aiEngine">
           <button data-eng="claude" class="active">Claude</button>
+          <button data-eng="chatgpt">ChatGPT</button>
           <button data-eng="local">Local model</button>
         </div>
         <div id="eng-claude">
@@ -237,6 +238,18 @@
               <option value="opus">Opus (best scenes)</option>
               <option value="sonnet">Sonnet (faster, lighter on usage)</option>
             </select>
+          </div>
+        </div>
+        <div id="eng-chatgpt" hidden>
+          <p class="hint">ChatGPT writes the scene inside the app through OpenAI's Codex, signed in with your ChatGPT account. No API key. It uses your ChatGPT plan's usage.</p>
+          <div class="cc-card" id="gptCard">
+            <span class="dot" id="gptDot"></span>
+            <div class="cc-main"><b id="gptTitle">Checking Codex…</b><span id="gptMeta"></span></div>
+            <button class="btn ghost" id="gptCheck" type="button" title="Check again">↻</button>
+          </div>
+          <div class="row gap">
+            <button class="btn" id="gptConnect" type="button">Sign in to ChatGPT</button>
+            <input id="gptModel" class="input small grow" placeholder="Model (blank = Codex's default)" aria-label="ChatGPT model">
           </div>
         </div>
         <div id="eng-local" hidden>

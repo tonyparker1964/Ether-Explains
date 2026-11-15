@@ -105,6 +105,23 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                                   done: { text, e, meta in
                                       if let t = text { replyHandler(["text": t, "meta": meta], nil) } else { replyHandler(nil, e ?? "Claude Code failed.") }
                                   })
+        case "codexStatus":
+            CodexCLI.shared.status { info in replyHandler(info, nil) }
+        case "codexConnect":
+            if let e = CodexCLI.shared.openTerminal(install: body["install"] as? Bool ?? false) { replyHandler(nil, e) } else { replyHandler(true, nil) }
+        case "codexRun":
+            CodexCLI.shared.run(prompt: body["prompt"] as? String ?? "", system: body["system"] as? String ?? "", model: body["model"] as? String ?? "",
+                                progress: { [weak self] n, tail in
+                                    guard let self = self,
+                                          let d = try? JSONSerialization.data(withJSONObject: ["chars": n, "tail": tail]),
+                                          let js = String(data: d, encoding: .utf8) else { return }
+                                    self.web.evaluateJavaScript("window.EtherLLMProgress && window.EtherLLMProgress(\(js))")
+                                },
+                                done: { text, e, meta in
+                                    if let t = text { replyHandler(["text": t, "meta": meta], nil) } else { replyHandler(nil, e ?? "Codex failed.") }
+                                })
+        case "codexStop":
+            CodexCLI.shared.stop(); replyHandler(true, nil)
         case "claudeStop":
             ClaudeCode.shared.stop(); replyHandler(true, nil)
         case "llmStop":

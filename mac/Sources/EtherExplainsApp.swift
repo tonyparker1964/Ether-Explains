@@ -39,10 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                          reason: "Playing and recording explainers")
         try? FileManager.default.createDirectory(at: Paths.saveDir, withIntermediateDirectories: true)
         _ = LocalServer.shared.start()
-        ClaudeCode.stopLeftovers()
+        ClaudeCode.stopLeftovers(); CodexCLI.stopLeftovers()
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ notification: Notification) { ClaudeCode.shared.stop(); LocalAI.shared.stop() }
+    func applicationWillTerminate(_ notification: Notification) { ClaudeCode.shared.stop(); CodexCLI.shared.stop(); LocalAI.shared.stop() }
 }
 
 enum Paths {

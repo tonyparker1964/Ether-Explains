@@ -792,8 +792,10 @@ async function aiFindModels(loud) {
   }
   aiKind = r.kind;
   const score = n => (/coder|code/i.test(n) ? 100 : 0) + (/qwen|deepseek|devstral|codestral|llama|gpt-oss|gemma/i.test(n) ? 10 : 0) + ((r.sizes && r.sizes[n]) ? Math.min(30, r.sizes[n] / 1e9) : 0) - (/embed|whisper|tts|vision-only/i.test(n) ? 500 : 0);
-  const list = r.models.slice().sort((a, b) => score(b) - score(a));
-  $('#aiModel').innerHTML = list.map(n => `<option value="${esc(n)}">${esc(n)}${r.sizes && r.sizes[n] ? ' · ' + (r.sizes[n] / 1e9).toFixed(1) + ' GB' : ''}</option>`).join('');
+  const cloud = n => /:cloud$|-cloud$/i.test(n);
+  const list = r.models.filter(n => !/embed|whisper|rerank/i.test(n)).sort((a, b) => (score(b) - (cloud(b) ? 200 : 0)) - (score(a) - (cloud(a) ? 200 : 0)));
+  if (!list.length) { $('#aiModel').innerHTML = '<option value="">No chat models found</option>'; return; }
+  $('#aiModel').innerHTML = list.map(n => `<option value="${esc(n)}">${esc(n)}${cloud(n) ? ' (online)' : r.sizes && r.sizes[n] ? ' · ' + (r.sizes[n] / 1e9).toFixed(1) + ' GB' : ''}</option>`).join('');
   if (!list.includes(P.aiModel)) { P.aiModel = list[0]; save(); }
   $('#aiModel').value = P.aiModel;
   if (loud) toast(`${list.length} model${list.length > 1 ? 's' : ''} found.`);

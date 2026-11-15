@@ -183,6 +183,26 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         return nil
     }
 
+    private func nativeLog(_ line: String) {
+        let u = Paths.saveDir.appendingPathComponent(".selftest.log")
+        let l = line + "\n"
+        if let h = try? FileHandle(forWritingTo: u) { h.seekToEndOfFile(); h.write(Data(l.utf8)); try? h.close() }
+    }
+    private func heartbeat(_ n: Int) {
+        guard n < 60 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self else { return }
+            let w = self.web.window
+            let vis = (w?.occlusionState.contains(.visible) ?? false)
+            let scr = w?.screen?.localizedName ?? "none"
+            var answered = false
+            self.web.evaluateJavaScript("Math.round(performance.now())") { r, _ in answered = true
+                self.nativeLog("beat \(n): page=\(r ?? "nil") windowVisible=\(vis) active=\(NSApp.isActive) screen=\(scr)") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if !answered { self.nativeLog("beat \(n): PAGE NOT ANSWERING windowVisible=\(vis) active=\(NSApp.isActive) screen=\(scr)") } }
+            self.heartbeat(n + 1)
+        }
+    }
+
     // MARK: self-test (only when Movies/Ether Explains/.selftest.js has content)
     private func runSelfTestIfAsked() {
         if selfTestRan { return }
@@ -191,6 +211,9 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         selfTestRan = true
         NSApp.activate(ignoringOtherApps: true)
         web.window?.makeKeyAndOrderFront(nil)
+        let prefs = web.configuration.preferences
+        nativeLog("native: hiddenTimerSel=\(prefs.responds(to: NSSelectorFromString("_setHiddenPageDOMTimerThrottlingEnabled:"))) suspendSel=\(prefs.responds(to: NSSelectorFromString("_setPageVisibilityBasedProcessSuspensionEnabled:"))) occlSel=\(web.responds(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")))")
         web.evaluateJavaScript(js)
+        heartbeat(0)
     }
 }

@@ -292,6 +292,12 @@ function setStatus(kind, text) { $('#statusDot').className = 'dot ' + kind; $('#
 let loadSeq = 0, glRetries = 0, lastPlay = { code: '', scale: 1 };
 function play(code, scale = 1, retry = false) {
   if (!code) return;
+  if (!/<script[\s>]/i.test(code)) {
+    $('#emptyState').hidden = true; player.srcdoc = '<!doctype html><body style="margin:0;background:#000"></body>';
+    setStatus('err', 'This version isn\'t a scene');
+    showAlert('This version is text, not a scene', 'It looks like the prompt was pasted instead of Claude\'s reply. Paste the prompt into Claude, then paste the HTML Claude gives back with "Paste Claude\'s code".');
+    return;
+  }
   if (!retry) glRetries = 0;
   lastPlay = { code, scale };
   readyInfo = null; frameLoaded = false; lastErrors = []; loadT0 = performance.now();
@@ -473,12 +479,25 @@ document.addEventListener('fullscreenchange', () => setTimeout(() => layoutStage
 /* load code */
 const openPaste = () => { $('#pasteArea').value = ''; $('#pasteDlg').showModal(); setTimeout(() => $('#pasteArea').focus(), 50); };
 ['#pasteCodeBtn', '#pasteCodeBtn2', '#pasteCodeBtn3'].forEach(s => $(s).onclick = openPaste);
+// a scene is an HTML page with a script; our own prompt (or any plain text) is not
+const isPromptText = t => /for "Ether Explains"/.test(t) && /TECHNICAL RULES|player rules|CHANGE:/.test(t) && !/<script[\s>]/i.test(t);
+const looksLikeScene = code => /<script[\s>]/i.test(code) && /<\/script>/i.test(code);
+function checkScene(raw, code) {
+  if (isPromptText(raw)) return 'That\'s the prompt, not the scene. Paste it into a Claude chat first, then paste Claude\'s reply (the HTML) here.';
+  if (!looksLikeScene(code)) return 'That doesn\'t look like scene code. Paste the whole reply from Claude; it should contain an html code block.';
+  return '';
+}
 $('#pasteGo').onclick = e => {
-  const code = extractHtml($('#pasteArea').value);
-  if (!/<script|<canvas|three/i.test(code)) { e.preventDefault(); toast('That doesn\'t look like scene code — paste the HTML from Claude.'); return; }
+  const raw = $('#pasteArea').value, code = extractHtml(raw), bad = checkScene(raw, code);
+  if (bad) { e.preventDefault(); toast(bad, 6000); return; }
   addVersion(code, 'pasted');
 };
-$('#htmlFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; addVersion(extractHtml(await f.text()), f.name); e.target.value = ''; };
+$('#htmlFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  const raw = await f.text(), code = extractHtml(raw), bad = checkScene(raw, code);
+  if (bad) return toast(bad, 6000);
+  addVersion(code, f.name);
+};
 $('#demoBtn').onclick = async () => {
   try {
     const code = await (await fetch('demo.html', { cache: 'no-cache' })).text();

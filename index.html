@@ -217,6 +217,25 @@
         <a class="btn ghost" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a>
         <button id="pasteCodeBtn2" class="btn ghost">Paste Claude's code</button>
       </div>
+      <div class="local-ai">
+        <div class="subhead">Or make it on this Mac</div>
+        <p class="hint">Your own AI model writes the scene right here: no Claude chat, nothing leaves your Mac. Coding models do best (qwen3-coder is a good pick). A big model can take a few minutes.</p>
+        <div class="row gap">
+          <select id="aiServer" class="input small" aria-label="Local AI app">
+            <option value="http://127.0.0.1:11434">Ollama</option>
+            <option value="http://127.0.0.1:1234">LM Studio</option>
+            <option value="custom">Other address…</option>
+          </select>
+          <select id="aiModel" class="input small grow" aria-label="Model"><option value="">Press ↻ to find models</option></select>
+          <button id="aiFind" class="btn ghost" type="button" title="Find the models on this Mac">↻</button>
+        </div>
+        <input id="aiURL" class="input" placeholder="http://192.168.1.20:11434 (the other Mac mini, for example)" hidden>
+        <div class="row gap ai-go">
+          <button id="aiMake" class="btn primary" type="button">✦ Make the scene with local AI</button>
+          <button id="aiStop" class="btn ghost" type="button" hidden>■ Stop</button>
+        </div>
+        <div id="aiProgress" class="ai-progress" hidden><b id="aiStatus">Starting…</b><pre id="aiTail"></pre></div>
+      </div>
     </div>
 
     <!-- REVISE -->
@@ -230,6 +249,7 @@
       <textarea id="reviseOut" class="input mono" rows="10" spellcheck="false" readonly></textarea>
       <div class="row gap">
         <button id="copyRevise" class="btn primary">Copy change prompt</button>
+        <button id="aiFix" class="btn" type="button" title="Send this change to your local AI model and play the result">✦ Fix it with local AI</button>
         <a class="btn ghost" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a>
       </div>
       <div class="subhead">Versions</div>

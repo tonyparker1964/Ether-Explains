@@ -115,6 +115,7 @@ function bindAll() {
   $('#withSound').checked = !!P.withSound; $('#withSound').onchange = e => { P.withSound = e.target.checked; save(); buildPrompt(); };
   $('#customName').value = P.custom?.name || ''; $('#customBrief').value = P.custom?.brief || '';
   setTimingMode(P.timingMode || 'srt');
+  if (window.bindAiReady) bindAi();
 }
 function setTimingMode(m) {
   P.timingMode = m;
@@ -758,6 +759,96 @@ $('#importFile').onchange = async e => {
   e.target.value = '';
 };
 
+/* ---------------- local AI: write scenes with a model on this Mac ---------------- */
+const AI_SYSTEM = 'You are an expert three.js developer and motion designer. Follow every rule in the request exactly. Reply with ONE complete, self-contained HTML file inside a single ```html code block and nothing else: no explanations before or after.';
+let aiKind = 'ollama', aiBusy = false;
+const aiBase = () => P.aiServer === 'custom' ? (P.aiURL || '').replace(/\/+$/, '') : (P.aiServer || 'http://127.0.0.1:11434');
+function bindAi() {
+  $('#aiServer').value = P.aiServer || 'http://127.0.0.1:11434';
+  $('#aiURL').hidden = $('#aiServer').value !== 'custom'; $('#aiURL').value = P.aiURL || '';
+  if (P.aiModel && ![...$('#aiModel').options].some(o => o.value === P.aiModel)) $('#aiModel').innerHTML = `<option value="${esc(P.aiModel)}">${esc(P.aiModel)}</option>`;
+  $('#aiModel').value = P.aiModel || '';
+}
+$('#aiServer').onchange = () => { P.aiServer = $('#aiServer').value; P.aiModel = ''; save(); bindAi(); if (P.aiServer !== 'custom') aiFindModels(); };
+$('#aiURL').onchange = () => { P.aiURL = $('#aiURL').value.trim(); save(); aiFindModels(); };
+$('#aiModel').onchange = () => { P.aiModel = $('#aiModel').value; save(); };
+$('#aiFind').onclick = () => aiFindModels(true);
+async function aiFindModels(loud) {
+  const base = aiBase(); if (!base) return toast('Type the address of your AI app first.');
+  $('#aiModel').innerHTML = '<option value="">Looking…</option>';
+  let r = null, err = '';
+  try {
+    if (NATIVE) r = await NATIVE.call('llmModels', { base });
+    else {
+      const tags = await fetch(base + '/api/tags').then(x => x.ok ? x.json() : null).catch(() => null);
+      if (tags && tags.models) r = { kind: 'ollama', models: tags.models.map(m => m.name) };
+      else { const v1 = await fetch(base + '/v1/models').then(x => x.json()); r = { kind: 'openai', models: (v1.data || []).map(m => m.id) }; }
+    }
+  } catch (e) { err = (e && e.message) || String(e); }
+  if (!r || !r.models || !r.models.length) {
+    $('#aiModel').innerHTML = '<option value="">No models found</option>';
+    if (loud || err) toast(err && NATIVE ? err : (NATIVE ? 'No models found. Open Ollama or LM Studio and load a model.' : 'Couldn\'t reach your local AI from the web page. The Mac app connects on its own; in a browser, Ollama needs OLLAMA_ORIGINS set to allow this site.'), 6000);
+    return;
+  }
+  aiKind = r.kind;
+  const score = n => (/coder|code/i.test(n) ? 100 : 0) + (/qwen|deepseek|devstral|codestral|llama|gpt-oss|gemma/i.test(n) ? 10 : 0) + ((r.sizes && r.sizes[n]) ? Math.min(30, r.sizes[n] / 1e9) : 0) - (/embed|whisper|tts|vision-only/i.test(n) ? 500 : 0);
+  const list = r.models.slice().sort((a, b) => score(b) - score(a));
+  $('#aiModel').innerHTML = list.map(n => `<option value="${esc(n)}">${esc(n)}${r.sizes && r.sizes[n] ? ' · ' + (r.sizes[n] / 1e9).toFixed(1) + ' GB' : ''}</option>`).join('');
+  if (!list.includes(P.aiModel)) { P.aiModel = list[0]; save(); }
+  $('#aiModel').value = P.aiModel;
+  if (loud) toast(`${list.length} model${list.length > 1 ? 's' : ''} found.`);
+}
+async function aiGenerate(prompt, note) {
+  if (aiBusy) return;
+  if (!P.aiModel) { await aiFindModels(true); if (!P.aiModel) return; }
+  if (!NATIVE && location.protocol === 'https:' && !/^https:/.test(aiBase())) toast('Tip: the Mac app talks to your local AI without any setup.', 3500);
+  aiBusy = true;
+  const t0 = performance.now(), btns = ['#aiMake', '#aiFix'];
+  btns.forEach(s => $(s).disabled = true); $('#aiStop').hidden = false; $('#aiProgress').hidden = false;
+  const status = (txt, tail) => { $('#aiStatus').textContent = txt; if (tail != null) $('#aiTail').textContent = tail; };
+  status(`Asking ${P.aiModel}… (loading a big model can take a minute or two)`, '');
+  const timer = setInterval(() => { if (!aiBusy) return; const s = Math.round((performance.now() - t0) / 1000); if ($('#aiStatus').dataset.chars) status(`Writing the scene… ${$('#aiStatus').dataset.chars} characters · ${s}s`); else status(`Waiting for ${P.aiModel}… ${s}s`); }, 1000);
+  window.EtherLLMProgress = p => { $('#aiStatus').dataset.chars = p.chars; status(`Writing the scene… ${p.chars} characters · ${Math.round((performance.now() - t0) / 1000)}s`, p.tail); };
+  let text = null, err = '';
+  try {
+    if (NATIVE) text = await NATIVE.call('llm', { base: aiBase(), kind: aiKind, model: P.aiModel, system: AI_SYSTEM, prompt });
+    else text = await aiDirect(prompt);
+  } catch (e) { err = (e && e.message) || String(e); }
+  clearInterval(timer); delete $('#aiStatus').dataset.chars;
+  aiBusy = false; btns.forEach(s => $(s).disabled = false); $('#aiStop').hidden = true;
+  const secs = Math.round((performance.now() - t0) / 1000);
+  if (err || !text) { status(err || 'The model returned nothing.', ''); toast(err || 'The model returned nothing.', 5000); return; }
+  const code = extractHtml(text);
+  if (!looksLikeScene(code)) {
+    status(`The model answered in ${secs}s, but not with a complete scene. Try again, or pick a bigger coding model.`, text.slice(-300));
+    return;
+  }
+  status(`Done in ${secs}s with ${P.aiModel}. Playing it now. If something's off, describe the change in Revise and press ✦ Fix it with local AI.`, '');
+  addVersion(code, note + ' · ' + P.aiModel);
+}
+let aiAbort = null;
+async function aiDirect(prompt) { // web page only (the Mac app goes through native code)
+  aiAbort = new AbortController();
+  const ollama = aiKind === 'ollama', base = aiBase();
+  const body = ollama ? { model: P.aiModel, stream: true, messages: [{ role: 'system', content: AI_SYSTEM }, { role: 'user', content: prompt }], options: { num_ctx: 32768, num_predict: 30000, temperature: 0.35 } }
+    : { model: P.aiModel, stream: true, temperature: 0.35, max_tokens: 30000, messages: [{ role: 'system', content: AI_SYSTEM }, { role: 'user', content: prompt }] };
+  const r = await fetch(base + (ollama ? '/api/chat' : '/v1/chat/completions'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: aiAbort.signal });
+  if (!r.ok) throw new Error('The local AI answered with an error (' + r.status + ').');
+  const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', out = '';
+  for (;;) {
+    const { value, done } = await rd.read(); if (done) break;
+    buf += dec.decode(value, { stream: true }); const lines = buf.split('\n'); buf = lines.pop();
+    for (let l of lines) { l = l.trim(); if (!l) continue; if (!ollama) { if (!l.startsWith('data:')) continue; l = l.slice(5).trim(); if (l === '[DONE]') continue; }
+      try { const j = JSON.parse(l); out += ollama ? (j.message && j.message.content || '') : ((j.choices && j.choices[0].delta && j.choices[0].delta.content) || ''); } catch {} }
+    window.EtherLLMProgress({ chars: out.length, tail: out.slice(-160) });
+  }
+  return out;
+}
+$('#aiMake').onclick = () => aiGenerate(buildPrompt(), 'local AI');
+$('#aiFix').onclick = () => { const was = $('#includeCode').checked; $('#includeCode').checked = true; const pr = buildRevise(); $('#includeCode').checked = was; buildRevise();
+  if (!currentCode()) return toast('Load a scene first.'); showTab('prompt'); aiGenerate(pr, 'local AI fix'); };
+$('#aiStop').onclick = () => { if (NATIVE) NATIVE.call('llmStop'); else if (aiAbort) aiAbort.abort(); };
+
 /* ---------------- Mac app extras ---------------- */
 if (NATIVE) {
   document.body.classList.add('native');
@@ -770,6 +861,7 @@ if (NATIVE) {
 }
 
 /* ---------------- boot ---------------- */
+window.bindAiReady = true; bindAi(); if (NATIVE) aiFindModels();
 renderChips(); bindAll(); renderGallery(); updatePill(); renderCues(); layoutStage();
 if (currentCode()) play(currentCode());
 loadVoiceFor(P.id);

@@ -205,3 +205,11 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;paddi
 .vcues b{color:var(--cyan);font-weight:500;font-variant-numeric:tabular-nums;margin-right:6px}
 .hint.small{font-size:11.5px}
 @media (max-width:980px){ .cut-view{height:88vh} .mode-seg button{padding:7px 10px} }
+
+/* local AI */
+.local-ai{margin-top:18px;border-top:1px solid var(--line);padding-top:4px}
+.local-ai .row{margin-bottom:8px}
+.local-ai #aiURL{margin-bottom:8px}
+.ai-progress{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:rgba(2,16,24,.55);font-size:12.5px}
+.ai-progress b{color:var(--gold);font-weight:500}
+.ai-progress pre{margin:6px 0 0;max-height:72px;overflow:hidden;white-space:pre-wrap;font:11px/1.4 ui-monospace,Menlo,monospace;color:var(--muted)}

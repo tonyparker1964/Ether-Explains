@@ -78,6 +78,20 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 case .failure(let e): replyHandler(nil, e.localizedDescription)
                 }
             }
+        case "llmModels":
+            LocalAI.shared.models(base: body["base"] as? String ?? "http://127.0.0.1:11434") { r, e in replyHandler(r, e) }
+        case "llm":
+            LocalAI.shared.run(base: body["base"] as? String ?? "http://127.0.0.1:11434", kind: body["kind"] as? String ?? "ollama",
+                               model: body["model"] as? String ?? "", system: body["system"] as? String ?? "", prompt: body["prompt"] as? String ?? "",
+                               progress: { [weak self] n, tail in
+                                   guard let self = self,
+                                         let d = try? JSONSerialization.data(withJSONObject: ["chars": n, "tail": tail]),
+                                         let js = String(data: d, encoding: .utf8) else { return }
+                                   self.web.evaluateJavaScript("window.EtherLLMProgress && window.EtherLLMProgress(\(js))")
+                               },
+                               done: { text, e in replyHandler(text, e) })
+        case "llmStop":
+            LocalAI.shared.stop(); replyHandler(true, nil)
         case "copy":
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(body["text"] as? String ?? "", forType: .string)

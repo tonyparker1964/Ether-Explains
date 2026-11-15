@@ -90,6 +90,23 @@ final class WebController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                                    self.web.evaluateJavaScript("window.EtherLLMProgress && window.EtherLLMProgress(\(js))")
                                },
                                done: { text, e in replyHandler(text, e) })
+        case "claudeStatus":
+            ClaudeCode.shared.status { info in replyHandler(info, nil) }
+        case "claudeConnect":
+            if let e = ClaudeCode.shared.openTerminal(install: body["install"] as? Bool ?? false) { replyHandler(nil, e) } else { replyHandler(true, nil) }
+        case "claudeRun":
+            ClaudeCode.shared.run(prompt: body["prompt"] as? String ?? "", system: body["system"] as? String ?? "", model: body["model"] as? String ?? "",
+                                  progress: { [weak self] n, tail in
+                                      guard let self = self,
+                                            let d = try? JSONSerialization.data(withJSONObject: ["chars": n, "tail": tail]),
+                                            let js = String(data: d, encoding: .utf8) else { return }
+                                      self.web.evaluateJavaScript("window.EtherLLMProgress && window.EtherLLMProgress(\(js))")
+                                  },
+                                  done: { text, e, meta in
+                                      if let t = text { replyHandler(["text": t, "meta": meta], nil) } else { replyHandler(nil, e ?? "Claude Code failed.") }
+                                  })
+        case "claudeStop":
+            ClaudeCode.shared.stop(); replyHandler(true, nil)
         case "llmStop":
             LocalAI.shared.stop(); replyHandler(true, nil)
         case "copy":

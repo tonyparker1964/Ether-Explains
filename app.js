@@ -763,7 +763,47 @@ $('#importFile').onchange = async e => {
 const AI_SYSTEM = 'You are an expert three.js developer and motion designer. Follow every rule in the request exactly. Reply with ONE complete, self-contained HTML file inside a single ```html code block and nothing else: no explanations before or after.';
 let aiKind = 'ollama', aiBusy = false;
 const aiBase = () => P.aiServer === 'custom' ? (P.aiURL || '').replace(/\/+$/, '') : (P.aiServer || 'http://127.0.0.1:11434');
+let cc = null; // Claude Code status
+const engine = () => P.aiEngine || 'claude';
+function setEngine(e) {
+  P.aiEngine = e;
+  $$('#aiEngine button').forEach(b => b.classList.toggle('active', b.dataset.eng === e));
+  $('#eng-claude').hidden = e !== 'claude'; $('#eng-local').hidden = e !== 'local';
+  const who = e === 'claude' ? 'Claude' : 'local AI';
+  $('#aiMake').textContent = `✦ Make the scene with ${who}`; $('#aiFix').textContent = `✦ Fix it with ${who}`;
+  if (e === 'claude' && !cc) ccCheck(); if (e === 'local' && !$('#aiModel').value) aiFindModels();
+}
+$$('#aiEngine button').forEach(b => b.onclick = () => { setEngine(b.dataset.eng); save(); });
+async function ccCheck() {
+  if (!NATIVE) { $('#ccTitle').textContent = 'Claude Code works in the Mac app'; $('#ccMeta').textContent = ''; $('#ccConnect').hidden = true; return null; }
+  $('#ccTitle').textContent = 'Checking Claude Code…'; $('#ccMeta').textContent = ''; $('#ccDot').className = 'dot load';
+  try { cc = await NATIVE.call('claudeStatus'); } catch (e) { cc = { installed: false, error: String(e) }; }
+  const card = $('#ccCard');
+  if (!cc.installed) {
+    $('#ccDot').className = 'dot err'; card.classList.remove('ok');
+    $('#ccTitle').textContent = 'Claude Code isn\'t on this Mac yet'; $('#ccMeta').textContent = 'Set it up once: it installs and signs in, in Terminal.';
+    $('#ccConnect').textContent = 'Set up Claude Code';
+  } else if (!cc.signedIn) {
+    $('#ccDot').className = 'dot err'; card.classList.remove('ok');
+    $('#ccTitle').textContent = 'Claude Code needs you to sign in'; $('#ccMeta').textContent = (cc.version || '') + ' · press Sign in to Claude';
+    $('#ccConnect').textContent = 'Sign in to Claude';
+  } else {
+    $('#ccDot').className = 'dot ok'; card.classList.add('ok');
+    $('#ccTitle').textContent = 'Claude is connected';
+    $('#ccMeta').textContent = [cc.email, cc.subscriptionType, cc.version].filter(Boolean).join(' · ');
+    $('#ccConnect').textContent = 'Switch account';
+  }
+  return cc;
+}
+$('#ccCheck').onclick = () => ccCheck();
+$('#ccConnect').onclick = async () => {
+  try { await NATIVE.call('claudeConnect', { install: !!(cc && !cc.installed) }); toast('Terminal opened. Sign in there, then come back and press ↻.', 6000); }
+  catch (e) { toast(String(e && e.message || e), 5000); }
+};
+$('#ccModel').onchange = () => { P.ccModel = $('#ccModel').value; save(); };
 function bindAi() {
+  $('#ccModel').value = P.ccModel || '';
+  setEngine(engine());
   $('#aiServer').value = P.aiServer || 'http://127.0.0.1:11434';
   $('#aiURL').hidden = $('#aiServer').value !== 'custom'; $('#aiURL').value = P.aiURL || '';
   if (P.aiModel && ![...$('#aiModel').options].some(o => o.value === P.aiModel)) $('#aiModel').innerHTML = `<option value="${esc(P.aiModel)}">${esc(P.aiModel)}</option>`;
@@ -802,18 +842,25 @@ async function aiFindModels(loud) {
 }
 async function aiGenerate(prompt, note) {
   if (aiBusy) return;
-  if (!P.aiModel) { await aiFindModels(true); if (!P.aiModel) return; }
+  const useClaude = engine() === 'claude';
+  if (useClaude) {
+    if (!NATIVE) return toast('Making scenes with Claude works in the Ether Explains Mac app.');
+    if (!cc || !cc.installed || !cc.signedIn) await ccCheck();
+    if (!cc.installed || !cc.signedIn) return toast(cc.installed ? 'Sign in to Claude first (button above).' : 'Set up Claude Code first (button above).', 5000);
+  } else if (!P.aiModel) { await aiFindModels(true); if (!P.aiModel) return; }
+  const who = useClaude ? ('Claude' + (P.ccModel ? ' ' + P.ccModel[0].toUpperCase() + P.ccModel.slice(1) : '')) : P.aiModel;
   if (!NATIVE && location.protocol === 'https:' && !/^https:/.test(aiBase())) toast('Tip: the Mac app talks to your local AI without any setup.', 3500);
   aiBusy = true;
   const t0 = performance.now(), btns = ['#aiMake', '#aiFix'];
   btns.forEach(s => $(s).disabled = true); $('#aiStop').hidden = false; $('#aiProgress').hidden = false;
   const status = (txt, tail) => { $('#aiStatus').textContent = txt; if (tail != null) $('#aiTail').textContent = tail; };
-  status(`Asking ${P.aiModel}… (loading a big model can take a minute or two)`, '');
-  const timer = setInterval(() => { if (!aiBusy) return; const s = Math.round((performance.now() - t0) / 1000); if ($('#aiStatus').dataset.chars) status(`Writing the scene… ${$('#aiStatus').dataset.chars} characters · ${s}s`); else status(`Waiting for ${P.aiModel}… ${s}s`); }, 1000);
+  status(useClaude ? `Asking ${who}… (a full scene usually takes a few minutes)` : `Asking ${who}… (loading a big model can take a minute or two)`, '');
+  const timer = setInterval(() => { if (!aiBusy) return; const s = Math.round((performance.now() - t0) / 1000); if ($('#aiStatus').dataset.chars) status(`Writing the scene… ${$('#aiStatus').dataset.chars} characters · ${s}s`); else status(`${useClaude ? 'Claude is planning the scene' : 'Waiting for ' + who}… ${s}s`); }, 1000);
   window.EtherLLMProgress = p => { $('#aiStatus').dataset.chars = p.chars; status(`Writing the scene… ${p.chars} characters · ${Math.round((performance.now() - t0) / 1000)}s`, p.tail); };
   let text = null, err = '';
   try {
-    if (NATIVE) text = await NATIVE.call('llm', { base: aiBase(), kind: aiKind, model: P.aiModel, system: AI_SYSTEM, prompt });
+    if (useClaude) { const r = await NATIVE.call('claudeRun', { prompt, system: AI_SYSTEM, model: P.ccModel || '' }); text = r.text; }
+    else if (NATIVE) text = await NATIVE.call('llm', { base: aiBase(), kind: aiKind, model: P.aiModel, system: AI_SYSTEM, prompt });
     else text = await aiDirect(prompt);
   } catch (e) { err = (e && e.message) || String(e); }
   clearInterval(timer); delete $('#aiStatus').dataset.chars;
@@ -822,11 +869,11 @@ async function aiGenerate(prompt, note) {
   if (err || !text) { status(err || 'The model returned nothing.', ''); toast(err || 'The model returned nothing.', 5000); return; }
   const code = extractHtml(text);
   if (!looksLikeScene(code)) {
-    status(`The model answered in ${secs}s, but not with a complete scene. Try again, or pick a bigger coding model.`, text.slice(-300));
+    status(`${who} answered in ${secs}s, but not with a complete scene. Try again${useClaude ? '' : ', or pick a bigger coding model'}.`, text.slice(-300));
     return;
   }
-  status(`Done in ${secs}s with ${P.aiModel}. Playing it now. If something's off, describe the change in Revise and press ✦ Fix it with local AI.`, '');
-  addVersion(code, note + ' · ' + P.aiModel);
+  status(`Done in ${secs}s with ${who}. Playing it now. To change something, describe it in Revise and press ✦ Fix it.`, '');
+  addVersion(code, note + ' · ' + who);
 }
 let aiAbort = null;
 async function aiDirect(prompt) { // web page only (the Mac app goes through native code)
@@ -846,10 +893,10 @@ async function aiDirect(prompt) { // web page only (the Mac app goes through nat
   }
   return out;
 }
-$('#aiMake').onclick = () => aiGenerate(buildPrompt(), 'local AI');
+$('#aiMake').onclick = () => aiGenerate(buildPrompt(), engine() === 'claude' ? 'made in app' : 'local AI');
 $('#aiFix').onclick = () => { const was = $('#includeCode').checked; $('#includeCode').checked = true; const pr = buildRevise(); $('#includeCode').checked = was; buildRevise();
-  if (!currentCode()) return toast('Load a scene first.'); showTab('prompt'); aiGenerate(pr, 'local AI fix'); };
-$('#aiStop').onclick = () => { if (NATIVE) NATIVE.call('llmStop'); else if (aiAbort) aiAbort.abort(); };
+  if (!currentCode()) return toast('Load a scene first.'); showTab('prompt'); aiGenerate(pr, 'fix'); };
+$('#aiStop').onclick = () => { if (NATIVE) { NATIVE.call(engine() === 'claude' ? 'claudeStop' : 'llmStop'); } else if (aiAbort) aiAbort.abort(); };
 
 /* ---------------- Mac app extras ---------------- */
 if (NATIVE) {
@@ -863,7 +910,7 @@ if (NATIVE) {
 }
 
 /* ---------------- boot ---------------- */
-window.bindAiReady = true; bindAi(); if (NATIVE) aiFindModels();
+window.bindAiReady = true; bindAi();
 renderChips(); bindAll(); renderGallery(); updatePill(); renderCues(); layoutStage();
 if (currentCode()) play(currentCode());
 loadVoiceFor(P.id);
